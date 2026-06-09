@@ -2,7 +2,7 @@
   "name": "Disney Dining Reference",
   "short_name": "Disney Dining",
   "description": "Browse and search Disney World menus offline",
-  "start_url": "/index.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#2d7a3a",
