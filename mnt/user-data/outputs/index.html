@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Disney Dining">
+<title>Disney Dining Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f0ebe0;
+    --surface: #ffffff;
+    --surface2: #f7f3ea;
+    --border: #ddd8cc;
+    --border-strong: #c4bfb3;
+    --text: #1e1a14;
+    --text-muted: #6b6459;
+    --text-dim: #a09890;
+    --green: #2d7a3a;
+    --green-bright: #3a9e4a;
+    --green-light: #e8f5ea;
+    --green-mid: #b8dbbe;
+    --yellow: #f2c832;
+    --yellow-light: #fdf6d8;
+    --red: #c8382a;
+    --cream: #faf7f0;
+    --serif: 'Lora', Georgia, serif;
+    --sans: 'DM Sans', system-ui, sans-serif;
+    --r-sm: 12px;
+    --r-md: 16px;
+    --r-lg: 20px;
+    --r-xl: 24px;
+    --header-h: 48px;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bot: env(safe-area-inset-bottom, 0px);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    overscroll-behavior: none;
+  }
+
+  /* ── HEADER ── */
+  #header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: var(--green);
+    padding-top: var(--safe-top);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  }
+
+  #header-row1 {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px 6px;
+    height: var(--header-h);
+    overflow: hidden;
+  }
+
+  #home-btn {
+    background: none;
+    border: none;
+    color: var(--yellow);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 4px 0;
+    flex-shrink: 0;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  #nav-sep {
+    color: rgba(255,255,255,0.25);
+    font-size: 14px;
+    margin: 0 4px;
+    display: none;
+    flex-shrink: 0;
+  }
+
+  #back-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.75);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 400;
+    cursor: pointer;
+    padding: 4px 0;
+    flex-shrink: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    display: none;
+  }
+
+  #version-badge {
+    font-size: 9px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+
+  #header-title {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.6);
+    flex: 1;
+    text-align: right;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    padding-left: 8px;
+  }
+
+  #version-badge {
+    position: fixed;
+    top: calc(var(--safe-top) + 16px);
+    right: 10px;
+    font-size: 9px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 0.04em;
+    z-index: 101;
+    pointer-events: none;
+  }
+
+  #search-row {
+    padding: 0 12px 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+  }
+
+  #filter-btn {
+    background: rgba(255,255,255,0.15);
+    border: 1.5px solid rgba(255,255,255,0.25);
+    border-radius: 20px;
+    color: rgba(255,255,255,0.8);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 13px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+  #filter-btn.active {
+    background: var(--yellow);
+    border-color: var(--yellow);
+    color: var(--green);
+  }
+  #filter-btn .filter-count {
+    background: var(--green);
+    color: var(--yellow);
+    font-size: 10px;
+    font-weight: 800;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    display: none;
+  }
+  #filter-btn.disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  #search-icon {
+    position: absolute;
+    left: 12px;
+    color: var(--text-dim);
+    font-size: 15px;
+    pointer-events: none;
+  }
+
+  #search-input {
+    width: 100%;
+    background: var(--cream);
+    border: none;
+    border-radius: 22px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    padding: 8px 36px 8px 34px;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: box-shadow 0.15s;
+  }
+  #search-input:focus { box-shadow: 0 0 0 2.5px var(--yellow); }
+  #search-input::placeholder { color: var(--text-dim); }
+
+  #search-clear {
+    position: absolute;
+    right: 10px;
+    background: var(--border-strong);
+    border: none;
+    color: white;
+    font-size: 10px;
+    cursor: pointer;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  #park-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 12px 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  #park-row::-webkit-scrollbar { display: none; }
+
+  .park-btn {
+    background: rgba(255,255,255,0.15);
+    border: 1.5px solid rgba(255,255,255,0.25);
+    border-radius: 20px;
+    color: rgba(255,255,255,0.7);
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 5px 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .park-btn.active {
+    background: var(--yellow);
+    color: var(--green);
+    border-color: var(--yellow);
+  }
+
+  #clear-parks-btn {
+    background: none;
+    border: 1.5px solid rgba(255,255,255,0.2);
+    border-radius: 20px;
+    color: rgba(255,255,255,0.45);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-left: auto;
+    transition: all 0.15s;
+  }
+  #clear-parks-btn:active { color: rgba(255,255,255,0.9); }
+
+  /* ── MAIN ── */
+  #main {
+    padding-top: calc(var(--safe-top) + var(--header-h) + 84px);
+    padding-bottom: calc(var(--safe-bot) + 24px);
+    min-height: 100vh;
+  }
+
+  /* ── SEARCH OVERLAY ── */
+  #search-results {
+    display: none;
+    position: fixed;
+    top: calc(var(--safe-top) + var(--header-h) + 84px);
+    left: 10px; right: 10px;
+    bottom: calc(var(--safe-bot) + 12px);
+    background: var(--cream);
+    z-index: 90;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--r-xl);
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.1);
+    border: 1px solid var(--border);
+    transition: bottom 0.22s cubic-bezier(0.34,1.26,0.64,1);
+  }
+  #search-results.visible { display: block; }
+  #search-results.filter-open { bottom: calc(var(--filter-sheet-h, 160px) + 20px); }
+
+  #results-count {
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 12px 16px 8px;
+    background: var(--surface2);
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    border-bottom: 1px solid var(--border);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .results-section-header {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--green);
+    padding: 10px 16px 6px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 37px;
+    z-index: 1;
+  }
+
+  .result-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .result-item:active { background: var(--green-light); }
+  .result-item:last-child { border-bottom: none; border-radius: 0 0 var(--r-xl) var(--r-xl); }
+
+  .result-restaurant {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    background: var(--cream);
+    transition: background 0.1s;
+  }
+  .result-restaurant:active { background: var(--green-light); }
+  .result-restaurant-name { font-size: 15px; font-weight: 600; color: var(--text); }
+  .result-restaurant-meta { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .result-restaurant-arrow { color: var(--green); font-size: 20px; }
+
+  .result-item-name { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+  .result-item-name em { font-style: normal; color: var(--red); font-weight: 700; }
+  .result-item-restaurant { font-size: 13px; color: var(--text-muted); margin-bottom: 2px; }
+  .result-item-meta { display: flex; justify-content: space-between; align-items: center; }
+  .result-item-location { font-size: 12px; color: var(--text-dim); }
+  .result-item-price { font-size: 13px; color: var(--green); font-weight: 600; }
+
+  /* ── VIEWS ── */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ── HOME ── */
+  .app-header {
+    padding: 8px 16px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .app-tagline {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+
+  .park-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    background: var(--surface);
+    border-radius: var(--r-lg);
+    margin: 6px 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .park-card:active { background: var(--green-light); transform: scale(0.98); }
+  .park-card-name { font-size: 17px; font-weight: 500; color: var(--text); }
+  .park-card-count { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+  .park-card-arrow { color: var(--green); font-size: 22px; font-weight: 300; }
+
+  /* ── LIST VIEWS ── */
+  .section-header {
+    padding: 14px 16px 8px;
+    position: sticky;
+    top: calc(var(--safe-top) + var(--header-h) + 84px);
+    z-index: 50;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .section-title {
+    font-family: var(--serif);
+    font-size: 24px;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+  .section-subtitle { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+
+  .list-card {
+    background: var(--surface);
+    border-radius: var(--r-lg);
+    margin: 4px 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    overflow: hidden;
+  }
+
+  .list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-bottom: 1px solid var(--border);
+  }
+  .list-item:last-child { border-bottom: none; }
+  .list-item:active { background: var(--green-light); }
+  .list-item-left { flex: 1; }
+  .list-item-name { font-size: 16px; font-weight: 500; color: var(--text); }
+  .list-item-sub { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+  .list-item-arrow { color: var(--green); font-size: 22px; margin-left: 8px; }
+
+  /* ── MENU VIEW ── */
+  .restaurant-header {
+    position: sticky;
+    top: calc(var(--safe-top) + var(--header-h) + 84px);
+    z-index: 50;
+    background: var(--bg);
+    padding: 14px 16px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .restaurant-name {
+    font-family: var(--serif);
+    font-size: 22px;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+  .restaurant-meta {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  /* sticky bar no longer needed — remove */
+  #menu-sticky-bar { display: none !important; }
+
+  /* ── DINING PERIOD TABS ── */
+  .period-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    position: sticky;
+    top: calc(var(--safe-top) + var(--header-h) + 84px + 58px);
+    z-index: 49;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .period-tabs::-webkit-scrollbar { display: none; }
+
+  .period-tab {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    color: var(--text-muted);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 16px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .period-tab.active {
+    background: var(--green);
+    border-color: var(--green);
+    color: white;
+    font-weight: 600;
+  }
+
+  /* ── MENU ITEMS ── */
+  .menu-group-wrap {
+    margin: 8px 10px 2px;
+    background: var(--surface);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+
+  .menu-group-header {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--green);
+    padding: 12px 16px 8px;
+    background: var(--green-light);
+    border-bottom: 1px solid var(--green-mid);
+  }
+
+  .menu-category-header {
+    font-family: var(--serif);
+    font-size: 15px;
+    font-style: italic;
+    color: var(--text-muted);
+    padding: 10px 16px 4px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .menu-item {
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .menu-item:last-child { border-bottom: none; }
+
+  .menu-item-name { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+  .menu-item-desc { font-size: 13px; color: var(--text-muted); line-height: 1.4; margin-bottom: 3px; }
+  .menu-item-price { font-size: 13px; color: var(--green); font-weight: 600; }
+
+  .menu-item.highlighted {
+    background: var(--yellow-light);
+    border-left: 3px solid var(--yellow);
+  }
+
+  .empty-state { text-align: center; padding: 60px 32px; color: var(--text-dim); }
+  .empty-state-text { font-size: 15px; line-height: 1.6; }
+  .scroll-anchor { scroll-margin-top: calc(var(--safe-top) + var(--header-h) + 100px); }
+
+  /* ── FILTER SHEET ── */
+  #filter-sheet {
+    display: none;
+    position: fixed;
+    left: 10px; right: 10px;
+    bottom: calc(var(--safe-bot) + 12px);
+    background: #d4cfc4;
+    border-radius: var(--r-xl);
+    z-index: 91;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.12);
+    border: 1px solid var(--border-strong);
+    overflow: hidden;
+    transform: translateY(20px);
+    opacity: 0;
+    transition: transform 0.22s cubic-bezier(0.34,1.26,0.64,1), opacity 0.18s ease;
+  }
+  #filter-sheet.visible {
+    display: block;
+    transform: translateY(0);
+    opacity: 1;
+  }
+  #filter-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px 8px;
+    border-bottom: 1px solid var(--border-strong);
+  }
+  #filter-sheet-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  #filter-clear-btn {
+    background: none;
+    border: none;
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--green);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 0;
+  }
+  #filter-cats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    padding: 12px 14px 14px;
+  }
+  .filter-cat-btn {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    color: var(--text-muted);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: all 0.13s;
+    white-space: nowrap;
+  }
+  .filter-cat-btn.active {
+    background: var(--green);
+    border-color: var(--green);
+    color: #fff;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="header-row1">
+    <button id="home-btn" aria-label="Home">Home</button>
+    <span id="nav-sep">›</span>
+    <button id="back-btn" aria-label="Back">‹ <span id="back-label"></span></button>
+    <div id="header-title"></div>
+  </div>
+  <div id="search-row">
+    <div id="search-wrap">
+      <span id="search-icon">⌕</span>
+      <input id="search-input" type="text" placeholder="Search menus…" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button id="search-clear" aria-label="Clear search" style="display:none">✕</button>
+    </div>
+    <button id="filter-btn" aria-label="Filter results">
+      ⊟ Filter
+      <span class="filter-count" id="filter-count">0</span>
+    </button>
+  </div>
+  <div id="park-row">
+    <button class="park-btn" data-park="Magic Kingdom">MK</button>
+    <button class="park-btn" data-park="EPCOT">EC</button>
+    <button class="park-btn" data-park="Disney's Hollywood Studios">HS</button>
+    <button class="park-btn" data-park="Disney's Animal Kingdom">AK</button>
+    <button class="park-btn" data-park="Disney Springs">DS</button>
+    <button class="park-btn" data-park="Disney Resorts">RES</button>
+    <button class="park-btn" data-park="Water Parks">WP</button>
+    <button id="clear-parks-btn" aria-label="Clear park filters">✕</button>
+  </div>
+</div>
+
+<span id="version-badge">v0.9</span>
+
+<div id="menu-sticky-bar">
+  <div id="menu-sticky-name"></div>
+  <div id="menu-sticky-meta"></div>
+</div>
+
+<div id="search-results">
+  <div id="results-count"></div>
+  <div id="results-list"></div>
+</div>
+
+<div id="main">
+
+  <div id="view-home" class="view active">
+    <div class="app-header">
+      <div class="app-tagline">Browse menus across all parks &amp; resorts</div>
+    </div>
+    <div id="park-cards"></div>
+  </div>
+
+  <div id="view-areas" class="view">
+    <div class="section-header">
+      <div class="section-title" id="areas-title"></div>
+      <div class="section-subtitle" id="areas-subtitle"></div>
+    </div>
+    <div id="areas-list"></div>
+  </div>
+
+  <div id="view-restaurants" class="view">
+    <div class="section-header">
+      <div class="section-title" id="restaurants-title"></div>
+      <div class="section-subtitle" id="restaurants-subtitle"></div>
+    </div>
+    <div id="restaurants-list"></div>
+  </div>
+
+  <div id="view-menu" class="view">
+    <div class="restaurant-header">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div class="restaurant-name" id="menu-restaurant-name"></div>
+          <div class="restaurant-meta" id="menu-restaurant-meta"></div>
+        </div>
+        <a id="maps-link" href="#" target="_blank" rel="noopener"
+          style="display:none;font-size:22px;text-decoration:none;padding:4px 0 4px 12px;flex-shrink:0;"
+          aria-label="Open in Google Maps">📍</a>
+      </div>
+    </div>
+    <div id="period-tabs-wrap"></div>
+    <div id="menu-content"></div>
+  </div>
+
+</div>
+
+<div id="filter-sheet">
+  <div id="filter-sheet-header">
+    <span id="filter-sheet-title">Filter by category</span>
+    <button id="filter-clear-btn">Clear all</button>
+  </div>
+  <div id="filter-cats"></div>
+</div>
+
+<script>
+let DATA = [];
+let activePark = new Set();
+let activeCategories = new Set();
+let filterSheetOpen = false;
+let currentView = 'home';
+let currentPark = null;
+let currentArea = null;
+let currentRestaurant = null;
+let currentPeriod = null;
+let highlightItemName = null;
+
+const PARK_ABBR = {
+  'Magic Kingdom': 'MK', 'EPCOT': 'EC',
+  "Disney's Hollywood Studios": 'HS', "Disney's Animal Kingdom": 'AK',
+  'Disney Springs': 'DS', 'Disney Resorts': 'RES', 'Water Parks': 'WP'
+};
+const PERIOD_ORDER = ['Breakfast','Brunch','Lunch','Dinner','All Day'];
+
+// Redundant subcategory pairs — suppress italic subheader when same as group
+const REDUNDANT_CATS = new Set([
+  'cocktails|Specialty Cocktails','cocktails|Cocktails',
+  'non-alcoholic beverages|Beverages','non-alcoholic beverages|Drinks',
+  'non-alcoholic beverages|Non-Alcoholic Drinks',
+  'entrees|Entrees','entrees|Entrées','entrees|Lunch','entrees|Dinner',
+  'sides|Sides','sides|Side Items','sides|Sides & Extras',
+  'desserts|Dessert','desserts|Desserts',
+  'appetizers|Appetizers','appetizers|Appetizers/Starters',
+  'snacks|Snacks','beer & cider|Beer','beer & cider|Cider',
+  'bakery|Bakery','wine|Wine','wine|Wines',
+  'breakfast|Breakfast','breakfast|Breakfast Sandwiches',
+  'spirits|Spirits','sushi|Sushi','other|Other',
+  'soups & salads|Soup/Salad','soups & salads|Soups & Salads','soups & salads|Salads',
+  'kids|Kids\' Entrées','kids|Kids\' Desserts',
+  'coffee & tea|Tea'
+]);
+
+async function loadData() {
+  try {
+    const res = await fetch('menu_data.json');
+    DATA = await res.json();
+    init();
+  } catch(e) {
+    document.getElementById('view-home').innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-text">Could not load menu_data.json<br><br>Make sure it's in the same folder as index.html</div>
+      </div>`;
+  }
+}
+
+const CATEGORY_GROUPS = [
+  'appetizers','soups & salads','entrees','sushi','sides','snacks',
+  'breakfast','kids','desserts','bakery','coffee & tea',
+  'non-alcoholic beverages','beer & cider','wine','cocktails','spirits',
+  'prix fixe & special menus','other'
+];
+
+function init() {
+  buildParkCards();
+  buildFilterSheet();
+  setupSearch();
+  setupParkToggles();
+  setupFilterBtn();
+  setNav('home');
+  document.getElementById('home-btn').addEventListener('click', goHome);
+}
+
+function buildFilterSheet() {
+  // Static setup - chips populated dynamically by updateFilterChips()
+  document.getElementById('filter-clear-btn').addEventListener('click', () => {
+    clearCategoryFilters();
+    triggerResults();
+  });
+}
+
+function updateFilterChips(unfilteredResults) {
+  // Get categories present in current unfiltered results, in standard order
+  const presentCats = new Set(unfilteredResults.map(d => d.category_group).filter(Boolean));
+  const orderedCats = CATEGORY_GROUPS.filter(c => presentCats.has(c));
+
+  const container = document.getElementById('filter-cats');
+  container.innerHTML = orderedCats.map(cat => `
+    <button class="filter-cat-btn${activeCategories.has(cat) ? ' active' : ''}" data-cat="${esc(cat)}">${esc(cat)}</button>
+  `).join('');
+
+  container.querySelectorAll('.filter-cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cat = btn.dataset.cat;
+      if (activeCategories.has(cat)) {
+        activeCategories.delete(cat);
+        btn.classList.remove('active');
+      } else {
+        activeCategories.add(cat);
+        btn.classList.add('active');
+      }
+      updateFilterBtn();
+      triggerResults();
+    });
+  });
+
+  // Update filter sheet height CSS variable for search results window sizing
+  requestAnimationFrame(() => {
+    const sheet = document.getElementById('filter-sheet');
+    const h = sheet.offsetHeight;
+    if (h > 0) document.documentElement.style.setProperty('--filter-sheet-h', h + 'px');
+  });
+}
+
+function setupFilterBtn() {
+  const btn = document.getElementById('filter-btn');
+  btn.classList.add('disabled');
+
+  btn.addEventListener('click', () => {
+    if (btn.classList.contains('disabled')) return;
+    filterSheetOpen = !filterSheetOpen;
+    const sheet = document.getElementById('filter-sheet');
+    const results = document.getElementById('search-results');
+    if (filterSheetOpen) {
+      sheet.style.display = 'block';
+      requestAnimationFrame(() => {
+        sheet.classList.add('visible');
+        // Measure height after paint and set CSS var
+        requestAnimationFrame(() => {
+          const h = sheet.offsetHeight;
+          document.documentElement.style.setProperty('--filter-sheet-h', h + 'px');
+          results.classList.add('filter-open');
+        });
+      });
+    } else {
+      sheet.classList.remove('visible');
+      results.classList.remove('filter-open');
+      setTimeout(() => { sheet.style.display = 'none'; }, 220);
+    }
+  });
+}
+
+function updateFilterBtn() {
+  const btn = document.getElementById('filter-btn');
+  const countEl = document.getElementById('filter-count');
+  const n = activeCategories.size;
+  if (n > 0) {
+    btn.classList.add('active');
+    countEl.textContent = n;
+    countEl.style.display = 'flex';
+  } else {
+    btn.classList.remove('active');
+    countEl.style.display = 'none';
+  }
+}
+
+function clearCategoryFilters() {
+  activeCategories.clear();
+  document.querySelectorAll('.filter-cat-btn').forEach(b => b.classList.remove('active'));
+  updateFilterBtn();
+}
+
+function triggerResults() {
+  const q = document.getElementById('search-input').value.trim();
+  if (q.length >= 1) {
+    renderResults();
+    document.getElementById('search-results').classList.add('visible');
+  } else {
+    document.getElementById('search-results').classList.remove('visible');
+  }
+}
+
+function buildParkCards() {
+  const order = ['Magic Kingdom','EPCOT',"Disney's Hollywood Studios","Disney's Animal Kingdom",'Disney Springs','Disney Resorts','Water Parks'];
+  const counts = {};
+  DATA.forEach(d => {
+    if (d.park) {
+      if (!counts[d.park]) counts[d.park] = new Set();
+      counts[d.park].add(d.restaurant_id);
+    }
+  });
+  const container = document.getElementById('park-cards');
+  container.innerHTML = order.filter(p => counts[p]).map(park => `
+    <div class="park-card" data-park="${esc(park)}">
+      <div>
+        <div class="park-card-name">${esc(park)}</div>
+        <div class="park-card-count">${counts[park].size} restaurants</div>
+      </div>
+      <div class="park-card-arrow">›</div>
+    </div>
+  `).join('');
+  container.querySelectorAll('.park-card').forEach(el => {
+    el.addEventListener('click', () => {
+      activateParkToggle(el.dataset.park);
+      showAreas(el.dataset.park);
+    });
+  });
+}
+
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  window.scrollTo(0, 0);
+  currentView = name;
+}
+
+function showAreas(park) {
+  currentPark = park; currentArea = null; currentRestaurant = null;
+  const areas = [...new Set(DATA.filter(d => d.park === park && d.area).map(d => d.area))].sort();
+  document.getElementById('areas-title').textContent = park;
+  document.getElementById('areas-subtitle').textContent = `${areas.length} areas`;
+
+  const container = document.getElementById('areas-list');
+  // Group into one card
+  container.innerHTML = `<div class="list-card">${areas.map(area => {
+    const rCount = new Set(DATA.filter(d => d.park === park && d.area === area).map(d => d.restaurant_id)).size;
+    return `<div class="list-item" data-area="${esc(area)}">
+      <div class="list-item-left">
+        <div class="list-item-name">${esc(area)}</div>
+        <div class="list-item-sub">${rCount} restaurant${rCount !== 1 ? 's' : ''}</div>
+      </div>
+      <div class="list-item-arrow">›</div>
+    </div>`;
+  }).join('')}</div>`;
+
+  container.querySelectorAll('.list-item').forEach(el => {
+    el.addEventListener('click', () => showRestaurants(park, el.dataset.area));
+  });
+  setNav('areas', 'Home', goHome, PARK_ABBR[park] || park);
+  showView('areas');
+}
+
+function showRestaurants(park, area) {
+  currentArea = area; currentRestaurant = null;
+  const seen = new Set();
+  const restaurants = DATA
+    .filter(d => d.park === park && d.area === area)
+    .filter(d => { if (seen.has(d.restaurant_id)) return false; seen.add(d.restaurant_id); return true; })
+    .sort((a, b) => a.restaurant.localeCompare(b.restaurant));
+
+  document.getElementById('restaurants-title').textContent = area;
+  document.getElementById('restaurants-subtitle').textContent = `${PARK_ABBR[park]||park} · ${restaurants.length} restaurant${restaurants.length!==1?'s':''}`;
+
+  const container = document.getElementById('restaurants-list');
+  container.innerHTML = `<div class="list-card">${restaurants.map(r => `
+    <div class="list-item" data-rid="${esc(r.restaurant_id)}" data-rname="${esc(r.restaurant)}">
+      <div class="list-item-left">
+        <div class="list-item-name">${esc(r.restaurant)}</div>
+      </div>
+      <div class="list-item-arrow">›</div>
+    </div>
+  `).join('')}</div>`;
+
+  container.querySelectorAll('.list-item').forEach(el => {
+    el.addEventListener('click', () => showMenu(el.dataset.rid, el.dataset.rname, null));
+  });
+  setNav('restaurants', PARK_ABBR[park] || park, () => showAreas(park), area);
+  showView('restaurants');
+}
+
+function showMenu(restaurantId, restaurantName, scrollToItem, period) {
+  currentRestaurant = restaurantId;
+  highlightItemName = scrollToItem;
+
+  const allItems = DATA.filter(d => d.restaurant_id === restaurantId);
+  if (!allItems.length) return;
+  const first = allItems[0];
+
+  document.getElementById('menu-restaurant-name').textContent = restaurantName || first.restaurant;
+  document.getElementById('menu-restaurant-meta').textContent = [first.park, first.area].filter(Boolean).join(' · ');
+
+  // Maps link — place_id for accurate POI, coords as fallback
+  const mapsLink = document.getElementById('maps-link');
+  if (first.place_id) {
+    mapsLink.href = `https://www.google.com/maps/place/?q=place_id:${first.place_id}`;
+    mapsLink.style.display = 'block';
+  } else if (first.lat && first.lng) {
+    mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${first.lat},${first.lng}`;
+    mapsLink.style.display = 'block';
+  } else {
+    mapsLink.style.display = 'none';
+  }
+
+  // Get available dining periods in correct order, excluding 'All Day' if other periods exist
+  const rawPeriods = new Set(allItems.map(d => d.dining_period || 'All Day'));
+  const hasRealPeriods = PERIOD_ORDER.slice(0, 4).some(p => rawPeriods.has(p)); // Breakfast/Brunch/Lunch/Dinner
+  const availablePeriods = PERIOD_ORDER.filter(p => {
+    if (p === 'All Day') return rawPeriods.has('All Day') && !hasRealPeriods;
+    return rawPeriods.has(p);
+  });
+
+  // If only one period (or all same), no tabs needed
+  const showTabs = availablePeriods.length > 1;
+
+  // Set active period
+  if (period && availablePeriods.includes(period)) {
+    currentPeriod = period;
+  } else {
+    currentPeriod = availablePeriods[0];
+  }
+
+  // Build tabs
+  const tabsWrap = document.getElementById('period-tabs-wrap');
+  if (showTabs) {
+    tabsWrap.innerHTML = `<div class="period-tabs">${availablePeriods.map(p => `
+      <button class="period-tab${p === currentPeriod ? ' active' : ''}" data-period="${esc(p)}">${esc(p)}</button>
+    `).join('')}</div>`;
+    tabsWrap.querySelectorAll('.period-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        showMenu(restaurantId, restaurantName, null, btn.dataset.period);
+      });
+    });
+  } else {
+    tabsWrap.innerHTML = '';
+  }
+
+  // Filter items to current period — always include All Day items when showing a real period
+  const items = allItems.filter(d => {
+    const p = d.dining_period || 'All Day';
+    if (p === currentPeriod) return true;
+    if (p === 'All Day' && currentPeriod !== 'All Day') return true;
+    return false;
+  });
+
+  // Build menu grouped by category_group → category
+  const groups = {};
+  items.forEach(item => {
+    const gKey = item.group_display_order + '|' + (item.category_group || 'other');
+    if (!groups[gKey]) groups[gKey] = { order: item.group_display_order, group: item.category_group, cats: {} };
+    const cat = item.category || item.category_group;
+    if (!groups[gKey].cats[cat]) groups[gKey].cats[cat] = [];
+    groups[gKey].cats[cat].push(item);
+  });
+
+  const sortedGroups = Object.values(groups).sort((a, b) => a.order - b.order);
+  let html = '';
+  sortedGroups.forEach(g => {
+    const cats = Object.entries(g.cats).sort((a,b) => a[0].localeCompare(b[0]));
+    let groupHtml = '';
+    cats.forEach(([cat, catItems]) => {
+      const redundantKey = `${g.group}|${cat}`;
+      const showSubhead = !REDUNDANT_CATS.has(redundantKey) && cat.toLowerCase() !== (g.group||'').toLowerCase();
+      if (showSubhead) {
+        groupHtml += `<div class="menu-category-header">${esc(cat)}</div>`;
+      }
+      catItems.sort((a,b) => (a.item||'').localeCompare(b.item||'')).forEach(item => {
+        const isHL = scrollToItem && item.item && item.item.toLowerCase() === scrollToItem.toLowerCase();
+        groupHtml += `<div class="menu-item${isHL?' highlighted scroll-anchor':''}"${isHL?' id="highlighted-item"':''}>
+          <div class="menu-item-name">${esc(item.item||'')}</div>
+          ${item.description?`<div class="menu-item-desc">${esc(item.description)}</div>`:''}
+          ${item.price_display?`<div class="menu-item-price">${esc(item.price_display)}</div>`:''}
+        </div>`;
+      });
+    });
+    html += `<div class="menu-group-wrap">
+      <div class="menu-group-header">${esc(g.group||'other')}</div>
+      ${groupHtml}
+    </div>`;
+  });
+
+  document.getElementById('menu-content').innerHTML = html;
+
+  // Set back button — goes to restaurants if we came from browse, or home if from search
+  const backLabel = currentArea ? currentArea : 'Home';
+  const backAction = currentArea
+    ? () => showRestaurants(currentPark, currentArea)
+    : goHome;
+  setNav('menu', backLabel, backAction, '');
+  showView('menu');
+
+  if (scrollToItem) {
+    setTimeout(() => {
+      const el = document.getElementById('highlighted-item');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  }
+}
+
+let menuScrollHandler = function() {};
+
+// Navigation state stack for back button
+let navStack = []; // [{label, action}]
+
+function setNav(view, backLabel, backAction, titleText) {
+  const homeBtn = document.getElementById('home-btn');
+  const backBtn = document.getElementById('back-btn');
+  const navSep = document.getElementById('nav-sep');
+  const titleEl = document.getElementById('header-title');
+
+  // Home always visible
+  homeBtn.style.display = 'block';
+
+  if (view === 'home') {
+    backBtn.style.display = 'none';
+    navSep.style.display = 'none';
+    titleEl.textContent = '';
+  } else {
+    backBtn.style.display = 'block';
+    navSep.style.display = 'block';
+    document.getElementById('back-label').textContent = backLabel;
+    titleEl.textContent = titleText || '';
+    backBtn.onclick = backAction;
+  }
+}
+
+function navigateBreadcrumb(idx) {
+  if (idx === 0 && currentPark) { showAreas(currentPark); return; }
+  if (idx === 1 && currentPark && currentArea) { showRestaurants(currentPark, currentArea); return; }
+}
+
+function goHome() {
+  currentPark=null; currentArea=null; currentRestaurant=null; highlightItemName=null; currentPeriod=null;
+  clearAllParks();
+  clearSearch();
+  setNav('home');
+  showView('home');
+}
+
+function setupParkToggles() {
+  document.querySelectorAll('.park-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const park = btn.dataset.park;
+      if (activePark.has(park)) { activePark.delete(park); btn.classList.remove('active'); }
+      else { activePark.add(park); btn.classList.add('active'); }
+      triggerResults();
+    });
+  });
+  document.getElementById('clear-parks-btn').addEventListener('click', () => {
+    clearAllParks();
+    triggerResults();
+  });
+}
+
+function activateParkToggle(park) {
+  const btn = document.querySelector(`.park-btn[data-park="${CSS.escape(park)}"]`);
+  if (btn && !activePark.has(park)) { activePark.add(park); btn.classList.add('active'); }
+}
+
+function clearAllParks() {
+  activePark.clear();
+  document.querySelectorAll('.park-btn').forEach(b => b.classList.remove('active'));
+}
+
+function setupSearch() {
+  const input = document.getElementById('search-input');
+  const clearBtn = document.getElementById('search-clear');
+  let timer;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const q = input.value.trim();
+      clearBtn.style.display = q ? 'flex' : 'none';
+      triggerResults();
+    }, 120);
+  });
+  input.addEventListener('focus', () => {
+    if (input.value.trim().length >= 1) {
+      renderResults();
+      document.getElementById('search-results').classList.add('visible');
+    }
+  });
+  clearBtn.addEventListener('click', clearSearch);
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-clear').style.display = 'none';
+  document.getElementById('search-results').classList.remove('visible');
+  document.getElementById('filter-btn').classList.add('disabled');
+  document.getElementById('filter-cats').innerHTML = '';
+  clearCategoryFilters();
+  // Close filter sheet if open
+  if (filterSheetOpen) {
+    filterSheetOpen = false;
+    const sheet = document.getElementById('filter-sheet');
+    sheet.classList.remove('visible');
+    document.getElementById('search-results').classList.remove('filter-open');
+    setTimeout(() => { sheet.style.display = 'none'; }, 220);
+  }
+}
+
+function renderResults() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  if (!q) return;
+  const hasFilters = activeCategories.size > 0;
+
+  // Park filter base
+  const base = activePark.size > 0 ? DATA.filter(d => activePark.has(d.park)) : DATA;
+
+  // ── Restaurant matches ──────────────────────────────────────
+  const restSeen = new Set();
+  const restMatches = [];
+  base.forEach(d => {
+    const rid = d.restaurant_id;
+    if (restSeen.has(rid)) return;
+    const nameMatch = d.restaurant && d.restaurant.toLowerCase().includes(q);
+    const areaMatch = d.area && d.area.toLowerCase().includes(q);
+    if (nameMatch || areaMatch) {
+      restSeen.add(rid);
+      restMatches.push(d);
+    }
+  });
+  restMatches.sort((a,b) => a.restaurant.localeCompare(b.restaurant));
+
+  // ── Item matches ─────────────────────────────────────────────
+  const unfilteredItems = base.filter(d => d.item && d.item.toLowerCase().includes(q));
+  updateFilterChips(unfilteredItems);
+
+  const filteredItems = hasFilters
+    ? unfilteredItems.filter(d => activeCategories.has(d.category_group))
+    : unfilteredItems;
+
+  // Enable/disable filter button
+  document.getElementById('filter-btn').classList.toggle('disabled', unfilteredItems.length === 0);
+
+  // Sort items: exact start first, then alpha — grouped by park order
+  const PARK_ORDER = ['Magic Kingdom','EPCOT',"Disney's Hollywood Studios","Disney's Animal Kingdom",'Disney Springs','Disney Resorts','Water Parks'];
+  filteredItems.sort((a,b) => {
+    const aS = a.item.toLowerCase().startsWith(q);
+    const bS = b.item.toLowerCase().startsWith(q);
+    if (aS && !bS) return -1;
+    if (!aS && bS) return 1;
+    const pi = PARK_ORDER.indexOf(a.park) - PARK_ORDER.indexOf(b.park);
+    if (pi !== 0) return pi;
+    return a.item.localeCompare(b.item);
+  });
+
+  const countEl = document.getElementById('results-count');
+  const listEl = document.getElementById('results-list');
+
+  const totalCount = restMatches.length + filteredItems.length;
+  if (!totalCount) {
+    const parkMsg = activePark.size
+      ? `in ${[...activePark].map(p => PARK_ABBR[p]||p).join(', ')}`
+      : '';
+    countEl.textContent = 'No results' + (parkMsg ? ` ${parkMsg}` : '');
+    listEl.innerHTML = `<div class="empty-state"><div class="empty-state-text">Nothing found${parkMsg ? '<br><span style="font-size:12px;color:var(--text-dim)">Try clearing park filters to search everywhere</span>' : ''}</div></div>`;
+    return;
+  }
+
+  const filterLabel = [
+    activePark.size ? `${activePark.size} park${activePark.size>1?'s':''}` : '',
+    hasFilters ? `${activeCategories.size} categor${activeCategories.size>1?'ies':'y'}` : ''
+  ].filter(Boolean).join(', ');
+
+  countEl.textContent = `${totalCount.toLocaleString()} result${totalCount!==1?'s':''}${filterLabel?' · '+filterLabel:''}`;
+
+  let html = '';
+
+  // Restaurant section
+  if (restMatches.length) {
+    html += `<div class="results-section-header">Restaurants & Areas</div>`;
+    html += restMatches.slice(0, 10).map(r => `
+      <div class="result-restaurant" data-rid="${esc(r.restaurant_id)}" data-rname="${esc(r.restaurant)}">
+        <div>
+          <div class="result-restaurant-name">${highlightMatch(r.restaurant, q)}</div>
+          <div class="result-restaurant-meta">${esc(r.park||'')}${r.area?' · '+r.area:''}</div>
+        </div>
+        <div class="result-restaurant-arrow">›</div>
+      </div>`).join('');
+  }
+
+  // Items section grouped by park → area
+  if (filteredItems.length) {
+    const itemsByParkArea = {};
+    filteredItems.slice(0, 200).forEach(item => {
+      const park = item.park || 'Other';
+      const area = item.area || '';
+      if (!itemsByParkArea[park]) itemsByParkArea[park] = {};
+      if (!itemsByParkArea[park][area]) itemsByParkArea[park][area] = [];
+      itemsByParkArea[park][area].push(item);
+    });
+
+    const renderItems = (items) => items.map(item => {
+      const price = item.price_display || '';
+      return `<div class="result-item" data-rid="${esc(item.restaurant_id)}" data-rname="${esc(item.restaurant)}" data-iname="${esc(item.item)}">
+        <div class="result-item-name">${highlightMatch(item.item, q)}</div>
+        <div class="result-item-restaurant">${esc(item.restaurant)}</div>
+        <div class="result-item-meta">
+          <div class="result-item-location">${esc(item.area||'')}</div>
+          ${price?`<div class="result-item-price">${esc(price)}</div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+
+    [...PARK_ORDER, 'Other'].forEach(park => {
+      if (!itemsByParkArea[park]) return;
+      html += `<div class="results-section-header">${esc(park)}</div>`;
+      // Sort areas alphabetically, empty area last
+      const areas = Object.keys(itemsByParkArea[park]).sort((a,b) => {
+        if (!a) return 1; if (!b) return -1;
+        return a.localeCompare(b);
+      });
+      areas.forEach(area => {
+        html += renderItems(itemsByParkArea[park][area]);
+      });
+    });
+  }
+
+  listEl.innerHTML = html;
+
+  // Restaurant click handlers
+  listEl.querySelectorAll('.result-restaurant').forEach(el => {
+    el.addEventListener('click', () => {
+      const rid = el.dataset.rid;
+      const matched = DATA.find(d => d.restaurant_id === rid);
+      if (matched?.park) { currentPark = matched.park; currentArea = matched.area; }
+      document.getElementById('search-results').classList.remove('visible');
+      showMenu(rid, el.dataset.rname, null);
+    });
+  });
+
+  // Item click handlers
+  listEl.querySelectorAll('.result-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const rid = el.dataset.rid;
+      const matched = DATA.find(d => d.restaurant_id === rid);
+      if (matched?.park) { currentPark = matched.park; currentArea = matched.area; }
+      document.getElementById('search-results').classList.remove('visible');
+      showMenu(rid, el.dataset.rname, el.dataset.iname);
+    });
+  });
+}
+
+function highlightMatch(text, q) {
+  if (!text) return '';
+  const idx = text.toLowerCase().indexOf(q);
+  if (idx === -1) return esc(text);
+  return esc(text.slice(0,idx))+'<em>'+esc(text.slice(idx,idx+q.length))+'</em>'+esc(text.slice(idx+q.length));
+}
+
+function esc(str) {
+  if (str==null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+loadData();
+</script>
+</body>
+</html>
