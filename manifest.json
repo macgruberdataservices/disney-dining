@@ -1,0 +1,24 @@
+{
+  "name": "Disney Dining Reference",
+  "short_name": "Disney Dining",
+  "description": "Browse and search Disney World menus offline",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#2d7a3a",
+  "theme_color": "#2d7a3a",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
