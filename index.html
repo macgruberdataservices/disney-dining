@@ -430,7 +430,7 @@ html, body {
 <div id="loading">
   <div id="loading-title">Wienie</div>
   <div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-  <div id="loading-sub">Loading menus… <span id="app-version">v5</span></div>
+  <div id="loading-sub">Loading menus… <span id="app-version">v6</span></div>
 </div>
 
 <div id="theme-switcher">
@@ -1722,9 +1722,12 @@ function hideMapsCard(){
 }
 
 // ── BOOT ───────────────────────────────────────────────
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(err=>console.warn('SW registration failed',err)));
-}
+// SW registration disabled during active dev — see note in sw.js.
+// One-time manual unregister still needed on-device for the copy
+// that's already installed from earlier testing (see chat).
+// if('serviceWorker' in navigator){
+//   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(err=>console.warn('SW registration failed',err)));
+// }
 loadData();
 </script>
 </body>
