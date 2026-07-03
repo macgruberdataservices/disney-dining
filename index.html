@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -69,6 +69,9 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body {
   height: 100%; width: 100%;
+  overflow: hidden;
+  position: fixed;
+  inset: 0;
   background: var(--cream);
   color: var(--ink);
   font-family: var(--sans);
@@ -79,6 +82,8 @@ html, body {
 }
 
 #theme-switcher {
+  display: none; /* suppressed — field guide is the committed direction for now.
+    Flip back to flex to restore the Mid-Century comparison if feedback tanks. */
   position: fixed;
   top: calc(var(--safe-top) + 4px);
   left: var(--plane-margin);
@@ -156,7 +161,7 @@ html, body {
 #proximity-btn.no-permission { opacity: 0.28; cursor: default; }
 @keyframes prox-pulse { 0% { inset: -2px; opacity: 0.6; } 100% { inset: -11px; opacity: 0; } }
 
-#main { padding-top: 0; padding-bottom: calc(var(--safe-bot) + 24px); min-height: 100vh; }
+#main { padding-top: 0; padding-bottom: calc(var(--safe-bot) + 24px); height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
 #view-home { display: none; }
 #view-home.active { display: block; }
 .home-greeting { padding: 20px 16px 4px; font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ink); letter-spacing: -0.01em; }
@@ -425,7 +430,7 @@ html, body {
 <div id="loading">
   <div id="loading-title">Wienie</div>
   <div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-  <div id="loading-sub">Loading menus…</div>
+  <div id="loading-sub">Loading menus… <span id="app-version">v5</span></div>
 </div>
 
 <div id="theme-switcher">
@@ -907,7 +912,7 @@ function setNav(view,breadLabel,titleText){
 }
 function showView(name){
   ['home','browse','menu'].forEach(v=>document.getElementById('view-'+v).classList.remove('active'));
-  if(name!=='search'){const el=document.getElementById('view-'+name);if(el){el.classList.add('active');window.scrollTo(0,0);}}
+  if(name!=='search'){const el=document.getElementById('view-'+name);if(el){el.classList.add('active');document.getElementById('main').scrollTo(0,0);}}
   currentView=name;
   requestAnimationFrame(layoutPlanes);
 }
