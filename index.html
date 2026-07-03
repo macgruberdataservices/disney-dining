@@ -104,9 +104,9 @@ html, body {
 
 #glass-plane {
   position: fixed;
-  top: var(--plane-margin); left: var(--plane-margin); right: var(--plane-margin);
+  top: 0; left: var(--plane-margin); right: var(--plane-margin);
   z-index: 100;
-  border-radius: var(--r-xl);
+  border-radius: 0 0 var(--r-xl) var(--r-xl);
   overflow: hidden;
   box-shadow: 0 10px 36px rgba(0,0,0,0.26), 0 3px 10px rgba(0,0,0,0.14);
   background: var(--header-glass);
@@ -115,12 +115,12 @@ html, body {
   padding-top: var(--safe-top);
   transition: background 0.3s;
 }
-#header-bar { display: flex; align-items: center; padding: 36px 16px 8px; gap: 10px; }
+#header-bar { display: flex; align-items: center; padding: 14px 16px 8px; gap: 10px; }
 #home-btn { background: none; border: none; cursor: pointer; padding: 4px 0; flex-shrink: 0; white-space: nowrap; display: inline-flex; align-items: baseline; gap: 6px; }
 .brand-script { font-family: var(--serif); font-size: 18px; font-weight: 600; font-style: italic; color: var(--gold-lt); letter-spacing: -0.01em; }
 .brand-tag { display: none; }
 [data-theme="midcentury"] .brand-script { color: #FFE9C7; }
-[data-theme="parkguide"] .brand-script { font-family: 'Yellowtail', cursive; font-size: 22px; font-weight: 400; font-style: normal; color: #FFE9C7; letter-spacing: 0; }
+[data-theme="parkguide"] .brand-script { font-family: 'Yellowtail', cursive; font-size: 27px; font-weight: 400; font-style: normal; color: #FFE9C7; letter-spacing: 0; }
 [data-theme="parkguide"] .brand-tag { display: inline; font-family: 'Overpass', sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: #E4D4BE; opacity: 0.85; }
 #breadcrumb { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow: hidden; }
 #breadcrumb-sep { color: rgba(255,255,255,0.35); font-size: 14px; flex-shrink: 0; display: none; }
@@ -430,7 +430,7 @@ html, body {
 <div id="loading">
   <div id="loading-title">Wienie</div>
   <div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-  <div id="loading-sub">Loading menus… <span id="app-version">v7</span></div>
+  <div id="loading-sub">Loading menus… <span id="app-version">v8</span></div>
 </div>
 
 <div id="theme-switcher">
@@ -912,7 +912,16 @@ function setNav(view,breadLabel,titleText){
 }
 function showView(name){
   ['home','browse','menu'].forEach(v=>document.getElementById('view-'+v).classList.remove('active'));
-  if(name!=='search'){const el=document.getElementById('view-'+name);if(el){el.classList.add('active');document.getElementById('main').scrollTo(0,0);}}
+  if(name!=='search'){
+    const el=document.getElementById('view-'+name);
+    if(el){
+      el.classList.add('active');
+      // Scroll reset deferred a frame — resetting #main's scroll in the same
+      // tick as the display:block that just made it visible is unreliable in
+      // Safari; it can measure/clamp against the pre-layout scrollHeight.
+      requestAnimationFrame(()=>document.getElementById('main').scrollTo(0,0));
+    }
+  }
   currentView=name;
   requestAnimationFrame(layoutPlanes);
 }
