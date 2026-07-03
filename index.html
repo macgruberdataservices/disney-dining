@@ -815,6 +815,14 @@ function init(){
   resultsActive = false;
   showView('home');
   layoutPlanes();
+  // Custom web fonts (Yellowtail etc.) load async and can change the
+  // header's rendered height after this first layoutPlanes() already ran
+  // against fallback-font measurements — same stale-offset failure the
+  // theme switcher already works around, just triggered by page load
+  // instead of a theme change. Recalculate once fonts are actually in.
+  if(document.fonts && document.fonts.ready){
+    document.fonts.ready.then(layoutPlanes);
+  }
   dismissLoading();
 }
 function dismissLoading(){const el=document.getElementById('loading');el.classList.add('done');setTimeout(()=>el.remove(),500);}
