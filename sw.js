@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'wienie-v2';
+const CACHE_VERSION = 'wienie-v3';
 const APP_SHELL = [
   './',
   './index.html',
