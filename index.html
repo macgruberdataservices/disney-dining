@@ -180,8 +180,10 @@ html, body {
 .home-card-sub { font-size: 11px; color: var(--muted); line-height: 1.3; margin-top: auto; }
 .home-card-arrow { position: absolute; bottom: 14px; right: 14px; color: var(--dim); font-size: 16px; }
 
-#view-browse { display: none; }
+#view-browse { display: none; transition: transform 0.22s ease, opacity 0.22s ease; }
 #view-browse.active { display: block; }
+#view-browse.swipe-exit { transform: translateX(40px); opacity: 0; }
+#view-browse.swipe-enter { transition: none; transform: translateX(-20px); opacity: 0; }
 .list-section-hd { padding: 16px 16px 10px; }
 .list-section-title { font-family: var(--serif); font-size: 22px; font-weight: 500; color: var(--ink); letter-spacing: -0.01em; }
 .list-section-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -434,7 +436,7 @@ html, body {
 <div id="loading">
   <div id="loading-title">Wienie</div>
   <div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-  <div id="loading-sub">Loading menus… <span id="app-version">v8.3</span></div>
+  <div id="loading-sub">Loading menus… <span id="app-version">v9</span></div>
 </div>
 
 <div id="theme-switcher">
@@ -839,6 +841,7 @@ function init(){
   setupMapsCard();
   setupAllergyTooltip();
   setupNavigation();
+  setupSwipeBack();
   setupThemeSwitcher();
   document.getElementById('results-plane').classList.remove('visible');
   document.getElementById('filter-plane').classList.remove('visible');
@@ -891,38 +894,81 @@ function setupProximityBtn(){
 }
 
 // ── NAVIGATION ─────────────────────────────────────────
+function goBackOneLevel(){
+  if(currentView==='menu'){
+    // Returning from a menu page: go back to exactly the restaurant list
+    // we came from. browseStack still holds [park, area] (or
+    // [resort-root, resort]) from when we drilled into the restaurant —
+    // don't pop it, just re-render that same restaurant list rather than
+    // climbing an extra level up.
+    const top = browseStack[browseStack.length-1];
+    if(top?.type==='area'){
+      showRestaurantList(browseStack[browseStack.length-2]?.value, top.value);
+    } else if(top?.type==='park'){
+      showAreaList(top.value, top.label);
+    } else if(top?.type==='resort'){
+      showRestaurantListByResort(top.value);
+    } else if(top?.type==='resort-root'){
+      showResortList();
+    } else {
+      goHome();
+    }
+    return;
+  }
+  // Otherwise we're already inside the browse hierarchy (on an area,
+  // resort, or restaurant list) — pop one level to climb up, as before.
+  if(browseStack.length>1){browseStack.pop();const t=browseStack[browseStack.length-1];
+    if(t.type==='park') showAreaList(t.value,t.label);
+    else if(t.type==='area') showRestaurantList(browseStack[browseStack.length-2]?.value,t.value);
+    else if(t.type==='resort-root') showResortList();
+    else if(t.type==='resort') showRestaurantListByResort(t.value);
+  } else goHome();
+}
 function setupNavigation(){
   document.getElementById('home-btn').addEventListener('click',goHome);
-  document.getElementById('breadcrumb-label').addEventListener('click',()=>{
-    if(currentView==='menu'){
-      // Returning from a menu page: go back to exactly the restaurant list
-      // we came from. browseStack still holds [park, area] (or
-      // [resort-root, resort]) from when we drilled into the restaurant —
-      // don't pop it, just re-render that same restaurant list rather than
-      // climbing an extra level up.
-      const top = browseStack[browseStack.length-1];
-      if(top?.type==='area'){
-        showRestaurantList(browseStack[browseStack.length-2]?.value, top.value);
-      } else if(top?.type==='park'){
-        showAreaList(top.value, top.label);
-      } else if(top?.type==='resort'){
-        showRestaurantListByResort(top.value);
-      } else if(top?.type==='resort-root'){
-        showResortList();
-      } else {
-        goHome();
-      }
-      return;
+  document.getElementById('breadcrumb-label').addEventListener('click',goBackOneLevel);
+}
+
+// ── SWIPE-BACK (Browse only) ──────────────────────────
+// Instant-fire, not finger-tracked: we don't touch the DOM during the
+// drag, only decide pass/fail on touchend. That means a "failed" swipe
+// (too short, too vertical) costs nothing to bail out of — there's no
+// partial state to spring back from, unlike true drag-tracking.
+// Full-screen zone, not edge-only — confirmed no horizontal scroll
+// anywhere in Browse to collide with (checked 2026-07, see chat).
+function setupSwipeBack(){
+  const el = document.getElementById('view-browse');
+  const DIST_THRESHOLD = 70;   // px of horizontal travel to count as intentional
+  const ANGLE_RATIO = 2;       // must be this many times more horizontal than vertical
+                                 // to disambiguate from a diagonal vertical-scroll drag
+  let startX=0, startY=0, tracking=false;
+
+  el.addEventListener('touchstart', e=>{
+    if(e.touches.length!==1) return;
+    startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+    tracking=true;
+  }, {passive:true});
+
+  el.addEventListener('touchend', e=>{
+    if(!tracking) return; tracking=false;
+    const dx=e.changedTouches[0].clientX-startX;
+    const dy=e.changedTouches[0].clientY-startY;
+    if(dx>DIST_THRESHOLD && Math.abs(dx)>Math.abs(dy)*ANGLE_RATIO){
+      playSwipeBack();
     }
-    // Otherwise we're already inside the browse hierarchy (on an area,
-    // resort, or restaurant list) — pop one level to climb up, as before.
-    if(browseStack.length>1){browseStack.pop();const t=browseStack[browseStack.length-1];
-      if(t.type==='park') showAreaList(t.value,t.label);
-      else if(t.type==='area') showRestaurantList(browseStack[browseStack.length-2]?.value,t.value);
-      else if(t.type==='resort-root') showResortList();
-      else if(t.type==='resort') showRestaurantListByResort(t.value);
-    } else goHome();
-  });
+  }, {passive:true});
+}
+function playSwipeBack(){
+  const el=document.getElementById('view-browse');
+  el.classList.add('swipe-exit');
+  el.addEventListener('transitionend', function done(){
+    el.removeEventListener('transitionend', done);
+    goBackOneLevel();
+    el.classList.remove('swipe-exit');
+    el.classList.add('swipe-enter');
+    void el.offsetWidth; // force reflow so the enter transition actually plays
+    requestAnimationFrame(()=>el.classList.remove('swipe-enter'));
+  }, {once:true});
 }
 function goHome(){
   browseStack=[];currentRestId=null;highlightItem=null;currentPeriod=null;
