@@ -760,24 +760,40 @@ function setupThemeSwitcher(){
 // ── LAYOUT MATH ────────────────────────────────────────
 function layoutPlanes(){
   const plane = document.getElementById('glass-plane');
-  const planeRect = plane.getBoundingClientRect();
+  // offsetTop/offsetHeight are pure LAYOUT measurements — unlike
+  // getBoundingClientRect(), they are immune to iOS visual-viewport
+  // displacement while the keyboard is open or animating away. The old
+  // rect-based math could capture a garbage plane.bottom if any deferred
+  // layoutPlanes() fired mid keyboard dismiss (tap search → type → tap a
+  // result), which then poisoned --menu-sticky-top until the next trigger.
+  const planeBottom = plane.offsetTop + plane.offsetHeight;
   const margin = 8, gap = 8;
 
-  document.getElementById('main').style.paddingTop = (planeRect.bottom + gap) + 'px';
-  document.documentElement.style.setProperty('--menu-sticky-top', (planeRect.bottom + gap) + 'px');
+  document.getElementById('main').style.paddingTop = (planeBottom + gap) + 'px';
+  document.documentElement.style.setProperty('--menu-sticky-top', (planeBottom + gap) + 'px');
 
   const resultsPlane = document.getElementById('results-plane');
-  resultsPlane.style.top = (planeRect.bottom + gap) + 'px';
+  resultsPlane.style.top = (planeBottom + gap) + 'px';
 
   const filterPlane = document.getElementById('filter-plane');
   let bottomGap = margin;
   if(resultsActive){
-    const filterH = filterPlane.getBoundingClientRect().height;
-    bottomGap = filterH + margin + 6;
+    bottomGap = filterPlane.offsetHeight + margin + 6;
   }
   resultsPlane.style.bottom = bottomGap + 'px';
 }
 window.addEventListener('resize', layoutPlanes);
+// Any change to the plane's rendered height (font swap-in, theme switch,
+// breadcrumb wrap, safe-area change) re-syncs every dependent offset
+// automatically — this supersedes the font-ready and theme-switch rAF
+// workarounds as the load-bearing mechanism; those remain as harmless
+// redundancy.
+new ResizeObserver(()=>layoutPlanes()).observe(document.getElementById('glass-plane'));
+// Re-settle once the keyboard finishes opening/closing, in case a state
+// change landed mid-animation.
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', ()=>requestAnimationFrame(layoutPlanes));
+}
 
 // ── DATA LOAD ──────────────────────────────────────────
 async function loadData(){
