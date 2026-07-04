@@ -116,16 +116,15 @@ html, body {
   transition: background 0.3s;
 }
 #header-bar { display: flex; align-items: center; padding: 5px 16px 8px; gap: 10px; }
-#home-btn { background: none; border: none; cursor: pointer; padding: 4px 0; flex-shrink: 0; white-space: nowrap; display: inline-flex; align-items: baseline; gap: 6px; }
+#home-btn { background: none; border: none; cursor: pointer; padding: 0; flex-shrink: 0; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: var(--gold-lt); }
 .brand-script { font-family: var(--serif); font-size: 18px; font-weight: 600; font-style: italic; color: var(--gold-lt); letter-spacing: -0.01em; }
-.brand-tag { display: none; }
 [data-theme="midcentury"] .brand-script { color: #FFE9C7; }
 [data-theme="parkguide"] .brand-script { font-family: 'Yellowtail', cursive; font-size: 27px; font-weight: 400; font-style: normal; color: #FFE9C7; letter-spacing: 0; }
-[data-theme="parkguide"] .brand-tag { display: inline; font-family: 'Overpass', sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; color: #E4D4BE; opacity: 0.85; }
+[data-theme="parkguide"] #home-btn, [data-theme="midcentury"] #home-btn { color: #FFE9C7; }
 #breadcrumb { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow: hidden; }
 #breadcrumb-sep { color: rgba(255,255,255,0.35); font-size: 14px; flex-shrink: 0; display: none; }
 #breadcrumb-label { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; display: none; }
-#header-title { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; text-align: right; min-width: 0; }
+#header-title { flex: 1; text-align: right; min-width: 0; line-height: 1; }
 
 #search-row { display: flex; align-items: center; gap: 8px; padding: 0 12px 12px; }
 #search-wrap { position: relative; flex: 1; display: flex; align-items: center; }
@@ -435,7 +434,7 @@ html, body {
 <div id="loading">
   <div id="loading-title">Wienie</div>
   <div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-  <div id="loading-sub">Loading menus… <span id="app-version">v8.2</span></div>
+  <div id="loading-sub">Loading menus… <span id="app-version">v8.3</span></div>
 </div>
 
 <div id="theme-switcher">
@@ -445,12 +444,16 @@ html, body {
 
 <div id="glass-plane">
   <div id="header-bar">
-    <button id="home-btn"><span class="brand-script">Wienie:</span><span class="brand-tag">Follow the Food.</span></button>
+    <button id="home-btn" aria-label="Home">
+      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3.5 21 14 3" /><path d="M20.5 21 10 3" /><path d="M15.5 21 12 15l-3.5 6" /><path d="M2 21h20" />
+      </svg>
+    </button>
     <div id="breadcrumb">
       <span id="breadcrumb-sep">›</span>
       <span id="breadcrumb-label"></span>
     </div>
-    <div id="header-title"></div>
+    <div id="header-title"><span class="brand-script">Wienie:</span></div>
   </div>
   <div id="search-row">
     <div id="search-wrap">
@@ -926,12 +929,11 @@ function goHome(){
   closeSearchSession();
   setNav('home');showView('home');
 }
-function setNav(view,breadLabel,titleText){
+function setNav(view,breadLabel){
   const sep=document.getElementById('breadcrumb-sep');
   const lbl=document.getElementById('breadcrumb-label');
-  const title=document.getElementById('header-title');
-  if(view==='home'){sep.style.display='none';lbl.style.display='none';title.textContent='';}
-  else{sep.style.display=breadLabel?'inline':'none';lbl.style.display=breadLabel?'inline':'none';lbl.textContent=breadLabel||'';title.textContent=titleText||'';}
+  if(view==='home'){sep.style.display='none';lbl.style.display='none';}
+  else{sep.style.display=breadLabel?'inline':'none';lbl.style.display=breadLabel?'inline':'none';lbl.textContent=breadLabel||'';}
 }
 function showView(name){
   ['home','browse','menu'].forEach(v=>document.getElementById('view-'+v).classList.remove('active'));
@@ -1007,7 +1009,7 @@ function showBrowseHome(){
       else showAreaList(el.dataset.tag,el.dataset.label);
     });
   });
-  setNav('browse','','');showView('browse');
+  setNav('browse','');showView('browse');
 }
 
 function showAreaList(locTag,locLabel){
@@ -1028,7 +1030,7 @@ function showAreaList(locTag,locLabel){
   document.querySelectorAll('.list-row[data-area]').forEach(el=>{
     el.addEventListener('click',()=>showRestaurantList(locTag,el.dataset.area));
   });
-  setNav('browse','Explore',locLabel);showView('browse');
+  setNav('browse','Explore');showView('browse');
 }
 
 function showResortList(){
@@ -1048,7 +1050,7 @@ function showResortList(){
   document.querySelectorAll('.list-row[data-resort]').forEach(el=>{
     el.addEventListener('click',()=>showRestaurantListByResort(el.dataset.resort));
   });
-  setNav('browse','Explore','Resorts');
+  setNav('browse','Explore');
   showView('browse');
 }
 
@@ -1081,7 +1083,7 @@ function showRestaurantListByResort(resortName){
   document.querySelectorAll('.list-row[data-rid]').forEach(el=>{
     el.addEventListener('click',()=>{currentRestId=el.dataset.rid;showMenu(el.dataset.rid,null,null);});
   });
-  setNav('browse',browseStack[browseStack.length-2]?.label||'Resorts',resortName);
+  setNav('browse',browseStack[browseStack.length-2]?.label||'Resorts');
   showView('browse');
 }
 
@@ -1117,7 +1119,7 @@ function showRestaurantList(locTag,area){
   document.querySelectorAll('.list-row[data-rid]').forEach(el=>{
     el.addEventListener('click',()=>{currentRestId=el.dataset.rid;showMenu(el.dataset.rid,null,null);});
   });
-  setNav('browse',browseStack[browseStack.length-2]?.label||'Explore',area);
+  setNav('browse',browseStack[browseStack.length-2]?.label||'Explore');
   showView('browse');
 }
 
@@ -1221,7 +1223,7 @@ function showMenu(restaurantId,scrollToItem,period){
   });
 
   const backLabel=browseStack.length>0?(browseStack[browseStack.length-1]?.label||'Back'):'Search';
-  setNav('menu',backLabel,'');showView('menu');
+  setNav('menu',backLabel);showView('menu');
 
   if(scrollToItem){
     setTimeout(()=>{const el=document.getElementById('hl-item');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});},120);
