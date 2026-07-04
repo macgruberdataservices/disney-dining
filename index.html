@@ -12,7 +12,7 @@
 <meta name="theme-color" content="#3B4A32">
 <title>Wienie</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700&family=Bitter:wght@500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Yellowtail&family=Overpass:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Bitter:wght@500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Yellowtail&family=Overpass:wght@700&display=swap" rel="stylesheet">
 <style>
 /* ══════════════════════════════════════════════════════
    THEME SYSTEM — 4 switchable palettes, test bed
@@ -37,33 +37,13 @@
   --serif: 'Fraunces', Georgia, serif;
   --sans:  'Inter', system-ui, sans-serif;
 }
-[data-theme="midcentury"] {
-  --forest:   #1F6E6E;
-  --pine:     #E8A33D;
-  --pine-lt:  #F0BB66;
-  --gold:     #D94F30;
-  --gold-lt:  #FBE0CC;
-  --cream:    #DDD2BC;
-  --surface:  #FFFCF5;
-  --ink:      #2B2420;
-  --muted:    #756B5E;
-  --dim:      #A89D8C;
-  --border:   #CFC2A4;
-  --border-md:#C2B496;
-  --accent2:  var(--gold);
-  --header-glass: rgba(31,110,110,0.86);
-  --plane-glass: rgba(247,240,225,0.85);
-  --filter-glass: rgba(255,252,245,0.9);
-  --serif: 'Poppins', system-ui, sans-serif;
-  --sans:  'Inter', system-ui, sans-serif;
-}
 :root {
   --r-sm: 10px; --r-md: 14px; --r-lg: 18px; --r-xl: 24px;
   --safe-top: env(safe-area-inset-top, 44px);
   --safe-bot: env(safe-area-inset-bottom, 0px);
   --plane-margin: 8px;
   --filter-peek-h: 74px;
-  --filter-max-h: 27vh;
+  --filter-max-h: 65vh;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -81,27 +61,6 @@ html, body {
   transition: background 0.3s;
 }
 
-#theme-switcher {
-  display: none; /* suppressed — field guide is the committed direction for now.
-    Flip back to flex to restore the Mid-Century comparison if feedback tanks. */
-  position: fixed;
-  top: calc(var(--safe-top) + 4px);
-  left: var(--plane-margin);
-  right: var(--plane-margin);
-  z-index: 110;
-  gap: 6px; justify-content: center;
-  pointer-events: none;
-}
-#theme-switcher button {
-  pointer-events: auto;
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255,255,255,0.25);
-  color: #fff; font-family: var(--sans); font-size: 10px; font-weight: 600;
-  padding: 4px 9px; border-radius: 12px; cursor: pointer;
-}
-#theme-switcher button.active { background: rgba(255,255,255,0.9); color: #111; }
-
 #glass-plane {
   position: fixed;
   top: 0; left: var(--plane-margin); right: var(--plane-margin);
@@ -118,9 +77,8 @@ html, body {
 #header-bar { display: flex; align-items: center; padding: 5px 16px 8px; gap: 10px; }
 #home-btn { background: none; border: none; cursor: pointer; padding: 0; flex-shrink: 0; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: var(--gold-lt); }
 .brand-script { font-family: var(--serif); font-size: 18px; font-weight: 600; font-style: italic; color: var(--gold-lt); letter-spacing: -0.01em; }
-[data-theme="midcentury"] .brand-script { color: #FFE9C7; }
 [data-theme="parkguide"] .brand-script { font-family: 'Yellowtail', cursive; font-size: 27px; font-weight: 400; font-style: normal; color: #FFE9C7; letter-spacing: 0; }
-[data-theme="parkguide"] #home-btn, [data-theme="midcentury"] #home-btn { color: #FFE9C7; }
+[data-theme="parkguide"] #home-btn { color: #FFE9C7; }
 #breadcrumb { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow: hidden; }
 #breadcrumb-sep { color: rgba(255,255,255,0.35); font-size: 14px; flex-shrink: 0; display: none; }
 #breadcrumb-label { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; display: none; }
@@ -252,25 +210,10 @@ html, body {
 [data-theme="parkguide"] .period-tab { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.25); color: #D9C7A0; }
 [data-theme="parkguide"] .period-tab.active { background: #F5E6C8; border-color: #F5E6C8; color: #5A4632; }
 
-/* ── Mid-Century: pale yellow sticky card — a lighter wash of the
-   theme's existing amber accent (--pine), keeping it native to the
-   palette rather than introducing an unrelated hue. Dark ink text. ── */
-[data-theme="midcentury"] #menu-sticky-stack { background: #F5E3B8; }
-[data-theme="midcentury"] .menu-rest-header { background: transparent; }
-[data-theme="midcentury"] .menu-rest-name { color: var(--ink); }
-[data-theme="midcentury"] .menu-rest-meta { color: #5A4F3D; }
-[data-theme="midcentury"] .info-btn { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.18); color: var(--ink); }
-[data-theme="midcentury"] .period-tabs { background: transparent; border-top: 1px solid rgba(0,0,0,0.1); }
-[data-theme="midcentury"] .period-tab { background: rgba(255,255,255,0.5); border-color: rgba(0,0,0,0.12); color: #5A4F3D; }
-
 .period-tab.active { background: var(--forest); border-color: var(--forest); color: #fff; font-weight: 600; }
 
 .menu-group { margin: 8px 12px 2px; background: var(--surface); border-radius: var(--r-lg); border: 1px solid var(--border); overflow: hidden; }
 .menu-group-hd { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #fff; padding: 10px 16px 7px; background: var(--pine); }
-/* Mid-Century: olive-sage green sampled from the reference moodboard
-   (avocado-kitchen green), used only for menu section headers so they
-   read distinctly from the amber active-states elsewhere in this theme. */
-[data-theme="midcentury"] .menu-group-hd { background: #717544; }
 .menu-cat-hd { font-family: var(--serif); font-size: 14px; font-style: italic; color: var(--muted); padding: 8px 16px 4px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .menu-item { padding: 10px 16px; border-bottom: 1px solid var(--border); }
 .menu-item:last-child { border-bottom: none; }
@@ -359,7 +302,7 @@ html, body {
   display: none;
   position: fixed;
   left: var(--plane-margin); right: var(--plane-margin);
-  bottom: var(--plane-margin);
+  bottom: calc(var(--safe-bot) + var(--plane-margin));
   z-index: 96;
   background: var(--filter-glass);
   backdrop-filter: blur(24px) saturate(1.3);
@@ -437,12 +380,7 @@ html, body {
 <div id="loading">
   <div id="loading-title">Wienie</div>
   <div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-  <div id="loading-sub">Loading menus… <span id="app-version">v10</span></div>
-</div>
-
-<div id="theme-switcher">
-  <button data-theme="parkguide" class="active">Park Guide</button>
-  <button data-theme="midcentury">Mid-Century</button>
+  <div id="loading-sub">Loading menus… <span id="app-version">v13</span></div>
 </div>
 
 <div id="glass-plane">
@@ -621,7 +559,7 @@ function dist(la1,lo1,la2,lo2){const R=3958.8,dL=(la2-la1)*Math.PI/180,dO=(lo2-l
 const fmtDist = m => m < 0.1 ? Math.round(m*5280)+' ft' : m.toFixed(1)+' mi';
 function highlightMatch(text,q){if(!text||!q)return esc(text);const i=text.toLowerCase().indexOf(q.toLowerCase());if(i===-1)return esc(text);return esc(text.slice(0,i))+'<em>'+esc(text.slice(i,i+q.length))+'</em>'+esc(text.slice(i+q.length));}
 const filterCount = () => Object.values(filters).reduce((n,s)=>n+s.size,0);
-function locationLabel(r){if(!r)return '';if(r.park){const l=LOC_TAGS.find(x=>r.tags?.includes(x.tag));return[l?.abbr||r.park,r.area].filter(Boolean).join(' · ');}if(r.resort)return r.resort;return r.area||'';}
+function locationLabel(r){if(!r)return '';if(r.tags?.includes('water-park')){const l=LOC_TAGS.find(x=>x.tag==='water-park');return[l?.abbr||'WP',waterParkName(r)].filter(Boolean).join(' · ');}if(r.park){const l=LOC_TAGS.find(x=>r.tags?.includes(x.tag));return[l?.abbr||r.park,r.area].filter(Boolean).join(' · ');}if(r.resort)return r.resort;return r.area||'';}
 // Fixed top-level bucket order for non-proximity grouping.
 const TOP_BUCKET_ORDER = ['Parks', 'Disney Springs', 'Resorts', 'Other'];
 
@@ -702,6 +640,18 @@ function detectTypeCandidates(qLow){
   };
 }
 
+// Disney's API reports `area` for water park restaurants as the
+// surrounding RESORT ZONE (e.g. "Disney Springs Resort Area"), not a real
+// in-park land — there's no meaningful sub-area data. Group/filter by the
+// water park itself (Blizzard Beach vs Typhoon Lagoon) instead, everywhere
+// water parks are handled — this used to only be fixed in search results
+// (twoTierGroupKey) and NOT in Browse, which is why Browse showed the raw
+// resort-zone junk while search showed it correctly. One function now,
+// used by both, so they can't drift apart again.
+function waterParkName(r){
+  return (r.park || '').replace(/^Disney'?s\s+/i, '').replace(/\s+Water Park$/i, '').trim();
+}
+
 const PARK_ORDER = [
   { tag:'magic-kingdom', label:'Magic Kingdom' },
   { tag:'epcot', label:'EPCOT' },
@@ -722,12 +672,7 @@ function twoTierGroupKey(r){
     return { top:'Resorts', sub: r.resort || r.restaurant || 'Other' };
   }
   if(tags.includes('water-park')){
-    // Disney's API reports `area` for water parks as the surrounding
-    // RESORT ZONE (e.g. "Disney Springs Resort Area"), not an actual
-    // in-park land — there's no meaningful sub-area data, so group by
-    // the water park itself (Blizzard Beach vs Typhoon Lagoon) instead.
-    const wpName = (r.park || '').replace(/^Disney'?s\s+/i, '').replace(/\s+Water Park$/i, '').trim();
-    return { top:'Water Parks', sub: wpName || 'Other' };
+    return { top:'Water Parks', sub: waterParkName(r) || 'Other' };
   }
   const park = PARK_ORDER.find(p => tags.includes(p.tag));
   if(park){
@@ -748,22 +693,6 @@ function topBucketSortIndex(top){
 }
 
 function defaultPeriod(available){const h = new Date().getHours();const preferred = h < 11 ? 'Breakfast' : h < 15 ? 'Lunch' : 'Dinner';return available.includes(preferred) ? preferred : available[0];}
-
-// ── THEME SWITCHER ─────────────────────────────────────
-function setupThemeSwitcher(){
-  document.querySelectorAll('#theme-switcher button').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      document.body.setAttribute('data-theme',btn.dataset.theme);
-      document.querySelectorAll('#theme-switcher button').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      // Font changes between themes (Bitter, Poppins, Inter) render the
-      // glass header at slightly different heights — every sticky offset
-      // that depends on --menu-sticky-top goes stale until recalculated.
-      // Wait a frame for the new font/styles to actually apply first.
-      requestAnimationFrame(()=>requestAnimationFrame(layoutPlanes));
-    });
-  });
-}
 
 // ── LAYOUT MATH ────────────────────────────────────────
 function layoutPlanes(){
@@ -791,6 +720,16 @@ function layoutPlanes(){
     bottomGap = filterPlane.offsetHeight + margin + 6;
   }
   resultsPlane.style.bottom = bottomGap + 'px';
+
+  // Expanded filter height was a hardcoded 27vh — an arbitrary fraction of
+  // screen height with no relationship to actual available space, which is
+  // exactly why it left a large dead gap below the sheet on tall phones
+  // regardless of expand state. Compute the real available space instead:
+  // from just below the header down to the safe-area bottom, same margin
+  // logic already used for --plane-clearance above.
+  const safeBot = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bot')) || 0;
+  const filterMaxH = window.innerHeight - (planeBottom + gap) - safeBot - margin;
+  document.documentElement.style.setProperty('--filter-max-h', filterMaxH + 'px');
 }
 window.addEventListener('resize', layoutPlanes);
 // Any change to the plane's rendered height (font swap-in, theme switch,
@@ -840,7 +779,6 @@ function init(){
   setupAllergyTooltip();
   setupNavigation();
   setupSwipeBack();
-  setupThemeSwitcher();
   document.getElementById('results-plane').classList.remove('visible');
   document.getElementById('filter-plane').classList.remove('visible');
   searchSessionState = 'closed';
@@ -1073,12 +1011,14 @@ function showBrowseHome(){
 function showAreaList(locTag,locLabel){
   browseStack=[{type:'park',value:locTag,label:locLabel}];
   const rests=RESTAURANTS.filter(r=>r.tags?.includes(locTag));
-  const areas=[...new Set(rests.map(r=>r.area).filter(Boolean))].sort();
+  const isWaterPark = locTag==='water-park';
+  const areaOf = r => isWaterPark ? waterParkName(r) : r.area;
+  const areas=[...new Set(rests.map(areaOf).filter(Boolean))].sort();
   document.getElementById('browse-title').textContent=locLabel;
   document.getElementById('browse-sub').textContent=`${rests.length} restaurants`;
   if(areas.length<=1){showRestaurantList(locTag,areas[0]||'');return;}
   const rows=areas.map(area=>{
-    const n=rests.filter(r=>r.area===area).length;
+    const n=rests.filter(r=>areaOf(r)===area).length;
     return `<div class="list-row" data-area="${esc(area)}">
       <div class="list-row-left"><div class="list-row-name">${esc(area)}</div><div class="list-row-sub">${n} restaurant${n!==1?'s':''}</div></div>
       <div class="list-row-right"><span class="list-row-arrow">›</span></div>
@@ -1158,7 +1098,8 @@ function showRestaurantList(locTag,area){
   if(!(top?.type==='area' && top.value===area)){
     browseStack.push({type:'area',value:area,label:area});
   }
-  const rests=RESTAURANTS.filter(r=>r.tags?.includes(locTag)&&r.area===area).sort((a,b)=>a.restaurant.localeCompare(b.restaurant));
+  const isWaterPark = locTag==='water-park';
+  const rests=RESTAURANTS.filter(r=>r.tags?.includes(locTag)&&(isWaterPark ? waterParkName(r)===area : r.area===area)).sort((a,b)=>a.restaurant.localeCompare(b.restaurant));
   document.getElementById('browse-title').textContent=area;
   const abbr=LOC_TAGS.find(l=>l.tag===locTag)?.abbr||locTag;
   document.getElementById('browse-sub').textContent=`${abbr} · ${rests.length} restaurants`;
@@ -1414,7 +1355,7 @@ function renderResults(q){
   } else if(qLow){
     for(const r of filteredRests){
       if(restSeen.has(r.restaurant_id))continue;
-      if(r.restaurant?.toLowerCase().includes(qLow)||r.area?.toLowerCase().includes(qLow)){restMatches.push(r);restSeen.add(r.restaurant_id);}
+      if(r.restaurant?.toLowerCase().includes(qLow)||(r.tags?.includes('water-park')?waterParkName(r):r.area)?.toLowerCase().includes(qLow)){restMatches.push(r);restSeen.add(r.restaurant_id);}
     }
   } else if(filterCount()>0){
     // Filters active but no search text — this is "show me everything
@@ -1564,8 +1505,8 @@ function renderResults(q){
   listEl.innerHTML=html;
 
   // Measure the rendered top-bucket header height so sub-headers pin
-  // directly beneath it — robust across themes with different font
-  // metrics (Bitter/Poppins render slightly taller than Inter).
+  // directly beneath it — robust to font metric differences (Fraunces
+  // renders slightly taller than Inter).
   requestAnimationFrame(()=>{
     const topHd = listEl.querySelector('.results-top-hd');
     if(topHd){
