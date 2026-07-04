@@ -168,8 +168,8 @@ html, body {
 #view-home, #view-browse, #view-menu { padding-top: var(--plane-clearance, 0px); }
 #view-home { display: none; }
 #view-home.active { display: block; }
-.home-greeting { padding: 20px 16px 4px; font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ink); letter-spacing: -0.01em; }
-.home-sub { padding: 2px 16px 20px; font-size: 13px; color: var(--muted); }
+.home-greeting { padding: 20px 16px 4px; font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ink); letter-spacing: -0.01em; text-align: center; }
+.home-sub { padding: 2px 16px 20px; font-size: 13px; color: var(--muted); text-align: center; }
 .home-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 12px 20px; }
 .home-card { background: var(--surface); border-radius: var(--r-lg); border: 1.5px solid var(--border); padding: 18px 16px; cursor: pointer; transition: transform 0.12s, border-color 0.12s; display: flex; flex-direction: column; gap: 8px; min-height: 110px; position: relative; overflow: hidden; }
 .home-card:active { transform: scale(0.97); border-color: var(--pine); }
@@ -182,8 +182,9 @@ html, body {
 
 #view-browse { display: none; transition: transform 0.22s ease, opacity 0.22s ease; }
 #view-browse.active { display: block; }
-#view-browse.swipe-exit { transform: translateX(40px); opacity: 0; }
-#view-browse.swipe-enter { transition: none; transform: translateX(-20px); opacity: 0; }
+#view-menu { transition: transform 0.22s ease, opacity 0.22s ease; }
+.swipe-exit { transform: translateX(40px); opacity: 0; }
+.swipe-enter { transition: none; transform: translateX(-20px); opacity: 0; }
 .list-section-hd { padding: 16px 16px 10px; }
 .list-section-title { font-family: var(--serif); font-size: 22px; font-weight: 500; color: var(--ink); letter-spacing: -0.01em; }
 .list-section-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -436,7 +437,7 @@ html, body {
 <div id="loading">
   <div id="loading-title">Wienie</div>
   <div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-  <div id="loading-sub">Loading menus… <span id="app-version">v9</span></div>
+  <div id="loading-sub">Loading menus… <span id="app-version">v10</span></div>
 </div>
 
 <div id="theme-switcher">
@@ -465,12 +466,9 @@ html, body {
       <button id="search-clear" aria-label="Clear">✕</button>
     </div>
     <button id="proximity-btn" aria-label="Sort by distance">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <circle cx="12" cy="12" r="3"></circle>
-        <line x1="12" y1="2" x2="12" y2="6"></line>
-        <line x1="12" y1="18" x2="12" y2="22"></line>
-        <line x1="2" y1="12" x2="6" y2="12"></line>
-        <line x1="18" y1="12" x2="22" y2="12"></line>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"></path>
       </svg>
     </button>
   </div>
@@ -478,7 +476,7 @@ html, body {
 
 <div id="main">
   <div id="view-home" class="active">
-    <div class="home-greeting">Where's the wienie?</div>
+    <div class="home-greeting">Disney Dining Field Guide</div>
     <div class="home-sub">Search above, or pick a starting point.</div>
     <div class="home-cards" id="home-cards"></div>
   </div>
@@ -935,39 +933,53 @@ function setupNavigation(){
 // (too short, too vertical) costs nothing to bail out of — there's no
 // partial state to spring back from, unlike true drag-tracking.
 // Full-screen zone, not edge-only — confirmed no horizontal scroll
-// anywhere in Browse to collide with (checked 2026-07, see chat).
+// anywhere in Browse/Menu to collide with (checked 2026-07, see chat).
+// TODO (deferred 2026-07): tap-highlight on list-row/home-card/park-tile
+// fires instantly via CSS :active, with no awareness of the swipe gesture
+// below. Starting a swipe on top of a row flashes that row's highlight for
+// the whole drag. Fix is cancel-on-movement (kill the highlight once
+// touchmove exceeds ~10px, well under the 70px swipe-confirm threshold),
+// NOT delay-then-show — delaying adds latency to every real tap to fix a
+// problem that only exists on swipes. Requires: touchmove tracking (doesn't
+// exist yet, current gesture code is touchstart/touchend only) and moving
+// off CSS :active to a JS-managed class on every tappable row type in
+// Browse. Real scope, not a one-line tweak — see chat.
 function setupSwipeBack(){
-  const el = document.getElementById('view-browse');
   const DIST_THRESHOLD = 70;   // px of horizontal travel to count as intentional
   const ANGLE_RATIO = 2;       // must be this many times more horizontal than vertical
                                  // to disambiguate from a diagonal vertical-scroll drag
-  let startX=0, startY=0, tracking=false;
-
-  el.addEventListener('touchstart', e=>{
-    if(e.touches.length!==1) return;
-    startX=e.touches[0].clientX; startY=e.touches[0].clientY;
-    tracking=true;
-  }, {passive:true});
-
-  el.addEventListener('touchend', e=>{
-    if(!tracking) return; tracking=false;
-    const dx=e.changedTouches[0].clientX-startX;
-    const dy=e.changedTouches[0].clientY-startY;
-    if(dx>DIST_THRESHOLD && Math.abs(dx)>Math.abs(dy)*ANGLE_RATIO){
-      playSwipeBack();
-    }
-  }, {passive:true});
+  ['view-browse','view-menu'].forEach(id=>{
+    const el = document.getElementById(id);
+    let startX=0, startY=0, tracking=false;
+    el.addEventListener('touchstart', e=>{
+      if(e.touches.length!==1) return;
+      startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+      tracking=true;
+    }, {passive:true});
+    el.addEventListener('touchend', e=>{
+      if(!tracking) return; tracking=false;
+      const dx=e.changedTouches[0].clientX-startX;
+      const dy=e.changedTouches[0].clientY-startY;
+      if(dx>DIST_THRESHOLD && Math.abs(dx)>Math.abs(dy)*ANGLE_RATIO){
+        playSwipeBack(el);
+      }
+    }, {passive:true});
+  });
 }
-function playSwipeBack(){
-  const el=document.getElementById('view-browse');
-  el.classList.add('swipe-exit');
-  el.addEventListener('transitionend', function done(){
-    el.removeEventListener('transitionend', done);
+function playSwipeBack(sourceEl){
+  sourceEl.classList.add('swipe-exit');
+  sourceEl.addEventListener('transitionend', function done(){
+    sourceEl.removeEventListener('transitionend', done);
     goBackOneLevel();
-    el.classList.remove('swipe-exit');
-    el.classList.add('swipe-enter');
-    void el.offsetWidth; // force reflow so the enter transition actually plays
-    requestAnimationFrame(()=>el.classList.remove('swipe-enter'));
+    sourceEl.classList.remove('swipe-exit');
+    // Backing out of Menu lands on Browse, not Menu — animate whichever
+    // view actually ended up active, not the one the gesture started on.
+    const landedEl = document.getElementById('view-'+currentView);
+    if(landedEl){
+      landedEl.classList.add('swipe-enter');
+      void landedEl.offsetWidth; // force reflow so the enter transition actually plays
+      requestAnimationFrame(()=>landedEl.classList.remove('swipe-enter'));
+    }
   }, {once:true});
 }
 function goHome(){
