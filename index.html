@@ -60,8 +60,15 @@ html, body {
   -webkit-font-smoothing: antialiased;
   transition: background 0.3s;
 }
+/* ── DIAGNOSTIC (v17d) — DELETE BEFORE REAL RELEASE ──
+   The canvas (everything outside <body>'s fixed box) paints with <html>'s
+   background. Body fills the LAYOUT viewport exactly. So: bottom band
+   turns PINK → the layout viewport is short of the physical screen
+   (viewport displacement — keyboard shove or ICB sizing). Band stays
+   CREAM → the viewport is fine and the band is our own geometry math. */
+html { background: #E0218A; }
 
-#header-version { position: absolute; bottom: 3px; right: 10px; font-size: 9px; color: rgba(255,255,255,0.35); pointer-events: none; }
+#header-version { position: absolute; bottom: 3px; right: 10px; font-size: 8px; white-space: nowrap; color: rgba(255,255,255,0.35); pointer-events: none; }
 #glass-plane {
   position: fixed;
   top: 0; left: var(--plane-margin); right: var(--plane-margin);
@@ -511,7 +518,7 @@ html, body {
 'use strict';
 
 // ── STATE ──────────────────────────────────────────────
-const APP_VERSION = 'v16'; // bump this ONE place — loading screen and header tag both read from it
+const APP_VERSION = 'v17'; // bump this ONE place — loading screen and header tag both read from it
 let RESTAURANTS = [], MENUS = [], REST_MAP = {}, MENU_MAP = {};
 let userLat = null, userLng = null;
 let proximityActive = false;
@@ -768,9 +775,29 @@ window.addEventListener('resize', layoutPlanes);
 new ResizeObserver(()=>layoutPlanes()).observe(document.getElementById('glass-plane'));
 // Re-settle once the keyboard finishes opening/closing, in case a state
 // change landed mid-animation.
-if(window.visualViewport){
-  window.visualViewport.addEventListener('resize', ()=>requestAnimationFrame(layoutPlanes));
+// ── iOS STANDALONE KEYBOARD UN-SHOVE ───────────────────
+// When an input is focused, WebKit shoves the layout viewport up to keep
+// the field visible. Standalone PWAs are notorious for NOT fully
+// restoring it after the keyboard dismisses — every fixed element rides
+// up by the residue, leaving a dead band at the bottom of the screen
+// (~45pt observed on device, v16 era). Forcing scroll back to zero once
+// no input is focused reclaims it. Harmless no-op when already at zero.
+function unshoveViewport(){
+  const ae = document.activeElement;
+  if(ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA')) return; // keyboard legitimately up
+  window.scrollTo(0,0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
 }
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', ()=>{
+    requestAnimationFrame(()=>{ unshoveViewport(); layoutPlanes(); });
+  });
+}
+// visualViewport resize doesn't always fire for the dismiss in standalone
+// mode — focusout is the belt to its suspenders. The timeout lets the
+// keyboard finish its exit animation before we yank the scroll position.
+document.addEventListener('focusout', ()=>{ setTimeout(unshoveViewport, 60); });
 
 // ── DATA LOAD ──────────────────────────────────────────
 async function loadData(){
@@ -1802,7 +1829,24 @@ if('serviceWorker' in navigator){
 //   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(err=>console.warn('SW registration failed',err)));
 // }
 document.getElementById('app-version').textContent = APP_VERSION;
-document.getElementById('header-version').textContent = APP_VERSION;
+// ── DIAGNOSTIC HUD (v17d) — DELETE BEFORE REAL RELEASE ──
+// Live viewport numbers in the header version slot. Screenshot this in
+// the bad-band state:
+//   ih = window.innerHeight (layout viewport height)
+//   vv = visualViewport.height   ot = visualViewport.offsetTop
+//   sy = window.scrollY          sh = screen.height (physical, in pts)
+// Healthy standalone state: ih ≈ sh, ot = 0, sy = 0.
+// Keyboard-shove residue: ot > 0 and/or sy > 0 with keyboard closed.
+// Short ICB: ih noticeably < sh even with ot/sy at 0.
+function debugViewportHUD(){
+  const vv = window.visualViewport;
+  document.getElementById('header-version').textContent =
+    `${APP_VERSION}d ih:${window.innerHeight}` +
+    (vv ? ` vv:${Math.round(vv.height)} ot:${Math.round(vv.offsetTop)}` : '') +
+    ` sy:${Math.round(window.scrollY)} sh:${screen.height}`;
+}
+debugViewportHUD();
+setInterval(debugViewportHUD, 500);
 loadData();
 </script>
 </body>
