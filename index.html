@@ -7,7 +7,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Wienie">
-<link rel="manifest" href="manifest.json">
+<!-- DIAGNOSTIC (v17d2) — manifest link disabled to test whether iOS shell
+     geometry is being poisoned by the manifest (prime suspect: the
+     unsupported "orientation" key). With no manifest, iOS falls back to
+     the apple-* metas above, which are known-correct. RESTORE before real
+     release — losing the manifest costs the proper app name/icon set. -->
+<!-- <link rel="manifest" href="manifest.json"> -->
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#3B4A32">
 <title>Wienie</title>
@@ -1840,10 +1845,20 @@ document.getElementById('app-version').textContent = APP_VERSION;
 // Short ICB: ih noticeably < sh even with ot/sy at 0.
 function debugViewportHUD(){
   const vv = window.visualViewport;
+  // Resolved safe-area insets, read from elements that consume them:
+  // st = glass plane's padding-top (holds env(safe-area-inset-top)),
+  // sb = filter plane's padding-bottom (holds env(safe-area-inset-bottom)).
+  // Together with ih/sh these pin down the view's actual anchor: a view
+  // anchored at the physical top under the status bar reports st≈62;
+  // a view placed BELOW the status bar reports st:0 while iOS fakes the
+  // forest status bar with theme-color. Indistinguishable in screenshots,
+  // trivially distinguishable here.
+  const st = Math.round(parseFloat(getComputedStyle(document.getElementById('glass-plane')).paddingTop)||0);
+  const sb = Math.round(parseFloat(getComputedStyle(document.getElementById('filter-plane')).paddingBottom)||0);
   document.getElementById('header-version').textContent =
-    `${APP_VERSION}d ih:${window.innerHeight}` +
+    `${APP_VERSION}d2 ih:${window.innerHeight}` +
     (vv ? ` vv:${Math.round(vv.height)} ot:${Math.round(vv.offsetTop)}` : '') +
-    ` sy:${Math.round(window.scrollY)} sh:${screen.height}`;
+    ` sy:${Math.round(window.scrollY)} sh:${screen.height} st:${st} sb:${sb}`;
 }
 debugViewportHUD();
 setInterval(debugViewportHUD, 500);
