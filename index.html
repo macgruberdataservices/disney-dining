@@ -43,7 +43,7 @@
   --safe-bot: env(safe-area-inset-bottom, 0px);
   --plane-margin: 8px;
   --filter-peek-h: 74px;
-  --filter-max-h: 65vh;
+  --filter-max-h: 27vh;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -61,6 +61,7 @@ html, body {
   transition: background 0.3s;
 }
 
+#header-version { position: absolute; bottom: 3px; right: 10px; font-size: 9px; color: rgba(255,255,255,0.35); pointer-events: none; }
 #glass-plane {
   position: fixed;
   top: 0; left: var(--plane-margin); right: var(--plane-margin);
@@ -380,7 +381,7 @@ html, body {
 <div id="loading">
   <div id="loading-title">Wienie</div>
   <div class="loading-dots"><div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div></div>
-  <div id="loading-sub">Loading menus… <span id="app-version">v13</span></div>
+  <div id="loading-sub">Loading menus… <span id="app-version"></span></div>
 </div>
 
 <div id="glass-plane">
@@ -410,6 +411,7 @@ html, body {
       </svg>
     </button>
   </div>
+  <div id="header-version"></div>
 </div>
 
 <div id="main">
@@ -496,6 +498,7 @@ html, body {
 'use strict';
 
 // ── STATE ──────────────────────────────────────────────
+const APP_VERSION = 'v15'; // bump this ONE place — loading screen and header tag both read from it
 let RESTAURANTS = [], MENUS = [], REST_MAP = {}, MENU_MAP = {};
 let userLat = null, userLng = null;
 let proximityActive = false;
@@ -720,16 +723,6 @@ function layoutPlanes(){
     bottomGap = filterPlane.offsetHeight + margin + 6;
   }
   resultsPlane.style.bottom = bottomGap + 'px';
-
-  // Expanded filter height was a hardcoded 27vh — an arbitrary fraction of
-  // screen height with no relationship to actual available space, which is
-  // exactly why it left a large dead gap below the sheet on tall phones
-  // regardless of expand state. Compute the real available space instead:
-  // from just below the header down to the safe-area bottom, same margin
-  // logic already used for --plane-clearance above.
-  const safeBot = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-bot')) || 0;
-  const filterMaxH = window.innerHeight - (planeBottom + gap) - safeBot - margin;
-  document.documentElement.style.setProperty('--filter-max-h', filterMaxH + 'px');
 }
 window.addEventListener('resize', layoutPlanes);
 // Any change to the plane's rendered height (font swap-in, theme switch,
@@ -1771,6 +1764,8 @@ if('serviceWorker' in navigator){
 // if('serviceWorker' in navigator){
 //   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(err=>console.warn('SW registration failed',err)));
 // }
+document.getElementById('app-version').textContent = APP_VERSION;
+document.getElementById('header-version').textContent = APP_VERSION;
 loadData();
 </script>
 </body>
