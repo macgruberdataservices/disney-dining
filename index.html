@@ -7,12 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Wienie">
-<!-- DIAGNOSTIC (v17d2) — manifest link disabled to test whether iOS shell
-     geometry is being poisoned by the manifest (prime suspect: the
-     unsupported "orientation" key). With no manifest, iOS falls back to
-     the apple-* metas above, which are known-correct. RESTORE before real
-     release — losing the manifest costs the proper app name/icon set. -->
-<!-- <link rel="manifest" href="manifest.json"> -->
+<link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#3B4A32">
 <title>Wienie</title>
@@ -65,13 +60,6 @@ html, body {
   -webkit-font-smoothing: antialiased;
   transition: background 0.3s;
 }
-/* ── DIAGNOSTIC (v17d) — DELETE BEFORE REAL RELEASE ──
-   The canvas (everything outside <body>'s fixed box) paints with <html>'s
-   background. Body fills the LAYOUT viewport exactly. So: bottom band
-   turns PINK → the layout viewport is short of the physical screen
-   (viewport displacement — keyboard shove or ICB sizing). Band stays
-   CREAM → the viewport is fine and the band is our own geometry math. */
-html { background: #E0218A; }
 
 #header-version { position: absolute; bottom: 3px; right: 10px; font-size: 8px; white-space: nowrap; color: rgba(255,255,255,0.35); pointer-events: none; }
 #glass-plane {
@@ -523,7 +511,7 @@ html { background: #E0218A; }
 'use strict';
 
 // ── STATE ──────────────────────────────────────────────
-const APP_VERSION = 'v17'; // bump this ONE place — loading screen and header tag both read from it
+const APP_VERSION = 'v19'; // bump this ONE place — loading screen and header tag both read from it
 let RESTAURANTS = [], MENUS = [], REST_MAP = {}, MENU_MAP = {};
 let userLat = null, userLng = null;
 let proximityActive = false;
@@ -1013,12 +1001,17 @@ function buildHomeCards(){
   const priceChanges=MENUS.filter(m=>m.show_in_menu&&m.price_changed).length;
 
   const cards=[
-    {icon:'⊕',label:locationPermission==='denied'&&!userLat?'Pick a Park':'Near Me',
-     sub:locationPermission==='denied'&&!userLat?'Browse by location':'Sort by your distance',
+    {icon:'⊕',label:locationPermission==='denied'&&!userLat?'Enable Location to Search Nearby':'Near Me',
+     sub:locationPermission==='denied'&&!userLat?'Tap for instructions':'Nearest restaurants to you',
      action:()=>{
-       if(locationPermission==='denied'&&!userLat){showBrowseHome();}
-       else if(userLat){proximityActive=true;updateProximityBtn();focusSearch('');}
-       else fetchLocation(ok=>{if(ok){proximityActive=true;focusSearch('');}else showBrowseHome();});
+       if(locationPermission==='denied'&&!userLat){
+         alert("Location is turned off for this site.\n\nTo turn it on: open the Settings app, then either:\n• Settings → Privacy & Security → Location Services → Safari Websites, or\n• Settings → [this app's name], if you added it to your Home Screen — iOS sometimes lists installed web apps separately from Safari.\n\nSet it to Ask or Allow, then come back and try again.");
+       }
+       else if(userLat){ showNearbyRestaurants(); }
+       else fetchLocation(ok=>{
+         if(ok){ showNearbyRestaurants(); }
+         else alert("Location access was denied.\n\nTo turn it on: open the Settings app, then either:\n• Settings → Privacy & Security → Location Services → Safari Websites, or\n• Settings → [this app's name], if you added it to your Home Screen.\n\nSet it to Ask or Allow, then come back and try again.");
+       });
      }},
     {icon:'🗺️',label:'Browse',sub:'Parks, resorts & Disney Springs',action:()=>showBrowseHome()},
     festCount>0?{icon:'🎪',label:'Festival',sub:`${festCount} special items`,action:()=>showFestivalItems(),festival:true}:null,
@@ -1753,6 +1746,36 @@ document.addEventListener('click',e=>{
 });
 
 // ── SPECIAL VIEWS ──────────────────────────────────────
+function showNearbyRestaurants(){
+  const withDist = RESTAURANTS
+    .filter(r=>r.lat && r.lng)
+    .map(r=>({r, d: dist(userLat,userLng,r.lat,r.lng)}))
+    .sort((a,b)=>a.d-b.d)
+    .slice(0,20);
+  document.getElementById('search-input').value='';
+  searchSessionState='browsing';
+  resultsActive=true;
+  document.getElementById('results-plane').classList.add('visible');
+  document.getElementById('filter-plane').classList.add('visible');
+  document.getElementById('results-count').textContent = `${withDist.length} nearest restaurants`;
+  document.getElementById('results-sort-label').textContent='';
+  document.getElementById('results-back-btn').classList.remove('visible');
+  let html = `<div class="results-section-hd">Nearest to You</div>`;
+  html += withDist.map(({r,d})=>`
+    <div class="result-rest" data-rid="${esc(r.restaurant_id)}">
+      <div class="result-rest-body">
+        <div class="result-rest-name">${esc(r.restaurant)}</div>
+        <div class="result-rest-meta">${esc(locationLabel(r))}${r.price_tier?'  '+'$'.repeat(r.price_tier):''}</div>
+      </div>
+      <div class="result-rest-right"><span class="result-rest-dist">${esc(fmtDist(d))}</span><span class="result-rest-arrow">›</span></div>
+    </div>`).join('');
+  const listEl=document.getElementById('results-list');
+  listEl.innerHTML = html;
+  listEl.querySelectorAll('.result-rest[data-rid]').forEach(el=>{
+    el.addEventListener('click',()=>{browseStack=[];currentRestId=el.dataset.rid;tuckSearchSession();showMenu(el.dataset.rid,null,null);});
+  });
+  requestAnimationFrame(layoutPlanes);
+}
 function showFestivalItems(){
   const items=MENUS.filter(i=>i.is_festival_item&&i.show_in_menu);
   renderSpecialList(items,'🎪 Festival items',`${items.length} special items`);
@@ -1834,34 +1857,7 @@ if('serviceWorker' in navigator){
 //   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(err=>console.warn('SW registration failed',err)));
 // }
 document.getElementById('app-version').textContent = APP_VERSION;
-// ── DIAGNOSTIC HUD (v17d) — DELETE BEFORE REAL RELEASE ──
-// Live viewport numbers in the header version slot. Screenshot this in
-// the bad-band state:
-//   ih = window.innerHeight (layout viewport height)
-//   vv = visualViewport.height   ot = visualViewport.offsetTop
-//   sy = window.scrollY          sh = screen.height (physical, in pts)
-// Healthy standalone state: ih ≈ sh, ot = 0, sy = 0.
-// Keyboard-shove residue: ot > 0 and/or sy > 0 with keyboard closed.
-// Short ICB: ih noticeably < sh even with ot/sy at 0.
-function debugViewportHUD(){
-  const vv = window.visualViewport;
-  // Resolved safe-area insets, read from elements that consume them:
-  // st = glass plane's padding-top (holds env(safe-area-inset-top)),
-  // sb = filter plane's padding-bottom (holds env(safe-area-inset-bottom)).
-  // Together with ih/sh these pin down the view's actual anchor: a view
-  // anchored at the physical top under the status bar reports st≈62;
-  // a view placed BELOW the status bar reports st:0 while iOS fakes the
-  // forest status bar with theme-color. Indistinguishable in screenshots,
-  // trivially distinguishable here.
-  const st = Math.round(parseFloat(getComputedStyle(document.getElementById('glass-plane')).paddingTop)||0);
-  const sb = Math.round(parseFloat(getComputedStyle(document.getElementById('filter-plane')).paddingBottom)||0);
-  document.getElementById('header-version').textContent =
-    `${APP_VERSION}d2 ih:${window.innerHeight}` +
-    (vv ? ` vv:${Math.round(vv.height)} ot:${Math.round(vv.offsetTop)}` : '') +
-    ` sy:${Math.round(window.scrollY)} sh:${screen.height} st:${st} sb:${sb}`;
-}
-debugViewportHUD();
-setInterval(debugViewportHUD, 500);
+document.getElementById('header-version').textContent = APP_VERSION;
 loadData();
 </script>
 </body>

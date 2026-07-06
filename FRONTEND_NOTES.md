@@ -117,10 +117,62 @@ intentional visual difference between the two, not an oversight.
   display), extract the fix into a named function immediately, don't
   wait until it's already silently regressed three times to notice.
 
+- **RESOLVED 2026-07 (v19): Near Me feature silently reverted by a session
+  fork, re-merged.** A parallel chat session was started from an
+  `index.html` that predated the Near Me dedicated-view fix (v16-era).
+  Real, good work landed in that session (the filter-geometry rework, the
+  OS dead-band investigation above) — but since that session's copy never
+  had Near Me to begin with, there was no way for it to know to preserve
+  it, and the feature quietly disappeared when its output became the new
+  base. Not anyone's carelessness — it's the third instance of the exact
+  same underlying pattern this doc keeps logging (water-park bug, filter
+  geometry, now this): **two independent copies of the same fact will
+  drift, whether the "fact" is a data-field workaround, a layout
+  measurement, or an entire file.** The process fix: when starting a new
+  session to work on this project, always upload the current
+  `index.html` fresh rather than assuming a new session already has the
+  latest state — chat sessions don't share files with each other.
+
 Real issues, found and in most cases already fixed this project — logged
 here so they're documented in one place instead of scattered across chat
 history.
 
+- **RESOLVED 2026-07 (v16): filter sheet / results plane geometry drift.**
+  The filter card's CSS anchor gained `+ var(--safe-bot)` in one edit while
+  `layoutPlanes()` kept computing the results plane's bottom assuming the
+  old 8px anchor — result: results content rendering *below* the filter
+  card, and the card floating above a cream dead zone. Fixed by making
+  geometry a single source of truth: a `filterMetrics()` helper owns peek
+  height, max height, and the resolved safe-area pad, and **both**
+  `layoutPlanes()` and the drag handler read from it. Same lesson as the
+  water-park bug, different domain: **two pieces of code independently
+  encoding the same fact (where the filter sheet sits / what an API field
+  means) WILL drift — extract the fact into one named place the first
+  time two call sites exist, not after it breaks.** Also in this fix:
+  - Filter sheet now anchors at `bottom: 0` (flush to the physical screen
+    edge — the iOS home indicator floats over content, so this is the
+    hard maximum for reclaiming bottom real estate). The safe area became
+    *interior* bottom padding on the sheet, so chips clear the indicator.
+    Bottom corners squared, top radius kept — it's a sheet now, not a
+    floating card. **All height math includes the safe-area pad**; keep
+    the `+ safe-bot` terms if touching `--filter-peek-h`/`--filter-max-h`.
+  - `layoutPlanes()` positions the results bottom from the filter's
+    *target* height (inline drag height → expanded max → peek), never
+    `offsetHeight`, which reads a moving value mid-transition.
+  - During a live drag, the results plane's `bottom` transition (0.28s)
+    is disabled and layout runs synchronously per move event, so the
+    results edge tracks the finger instead of trailing it. Restored on
+    release so tap-to-expand still animates.
+  - Park chips center via auto-margins on first/last chip — NOT
+    `justify-content: center`, which clips the left edge of overflowing
+    flex content with no way to scroll to it. If chips ever get wrapped
+    in another element, the `:first-child`/`:last-child` hooks break;
+    re-check centering after any markup change there.
+- **`--filter-peek-h: 74px` is the next magic number in line.** It
+  currently fits exactly the handle row + one chip row. A chip wrap, a
+  font swap, or a padding tweak silently clips the chips at peek. Same
+  species as the `27vh` incident and the `scroll-margin-top: 160px` one —
+  should eventually be measured from content, not declared.
 - **Tap-highlight vs. swipe-gesture conflict — OPEN, not fixed.** Starting
   a swipe on top of a list row flashes that row's `:active` highlight for
   the whole drag. Real fix is cancel-on-movement (kill the highlight once
@@ -164,9 +216,34 @@ history.
 - **`--safe-top`/`--safe-bot` handling has been fixed in multiple places
   as bugs were found one at a time** (`viewport-fit=cover` missing
   entirely; `#filter-plane`'s `bottom` not matching `#maps-card`'s
-  pattern). Worth a deliberate pass checking every fixed-position element
-  against the same checklist, rather than continuing to find these one
-  screenshot at a time.
+  pattern; then the v16 geometry drift above). Worth a deliberate pass
+  checking every fixed-position element against the same checklist,
+  rather than continuing to find these one screenshot at a time. Note the
+  filter sheet now uses a *different* safe-area pattern than `#maps-card`
+  (interior padding vs. offset anchor) — that's intentional for the
+  bottom sheet, but it means "make it match maps-card" is no longer the
+  right instinct for bottom-anchored elements; decide per-element whether
+  it should float above the indicator or own the space under it.
+- **KNOWN ISSUE, OS-SIDE, TIMEBOXED 2026-07: ~62pt dead band at the
+  bottom of the standalone PWA.** iOS launches the home-screen app with
+  an internally inconsistent viewport: `window.innerHeight` = screen
+  minus the TOP safe inset (812 vs `screen.height` 874 on the test
+  device), anchored at the physical top — while simultaneously reporting
+  `safe-area-inset-top: 62` and `safe-area-inset-bottom: 34` as if the
+  view were full-bleed. The missing 62pt is an iOS-owned strip below the
+  web view that **no page CSS can paint** (proven: hot-pink `<html>`
+  canvas diagnostic — the band stayed cream). Ruled out with instrumented
+  builds (v17d/v17d2 HUD): keyboard-shove residue (ot/sy both 0), stale
+  home-screen shell (fresh reinstall, same numbers), the manifest
+  (removed entirely, band persisted), and page-side geometry (all metas
+  verified correct: `viewport-fit=cover`, `black-translucent`,
+  `apple-mobile-web-app-capable`). Conclusion: WebKit/iOS shell bug on
+  the current device OS build. **Do not spend more sessions on this.**
+  Retest after each iOS update; if a rotation-to-landscape-and-back
+  self-corrects it in-session, that further confirms the frame-compute
+  bug. The keyboard un-shove handler added in v17 stays as cheap
+  insurance against the (real, distinct) shove-residue behavior even
+  though it wasn't this bug.
 - **Cream background color was corrected once already** for being
   lightened instead of purely desaturated when asked to "pull it back a
   touch" — same-lightness-different-saturation vs. actually-just-lighter
@@ -233,4 +310,8 @@ about to test is a coat of paint or a structural change.
 **Note on history**: v8.2/v8.3 predate this rule being formalized — they
 happened organically, not by this schema. Treat everything from this
 point forward as governed by it; don't try to retroactively justify the
-early numbers.
+early numbers. Also: the filter-geometry rework was initially stamped
+"v15.1" before this rule was checked — under the rule it's a full
+increment (new positioning model, new measurement helper, layoutPlanes
+rewrite), so it ships as **v16**. If a stray "v15.1" build escaped to the
+device during testing, that's what it was.
