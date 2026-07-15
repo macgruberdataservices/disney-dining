@@ -188,7 +188,10 @@ html, body {
 
 .period-tabs { display: flex; gap: 6px; padding: 6px 12px; overflow-x: auto; scrollbar-width: none; background: var(--surface); border-top: 1px solid var(--border); }
 .period-tabs::-webkit-scrollbar { display: none; }
-.period-tab { background: var(--surface); border: 1.5px solid var(--border); border-radius: 16px; color: var(--muted); font-family: var(--sans); font-size: 12px; font-weight: 500; padding: 3px 13px; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all 0.15s; }
+.period-tab { display: flex; flex-direction: column; align-items: center; gap: 1px; background: var(--surface); border: 1.5px solid var(--border); border-radius: 14px; color: var(--muted); font-family: var(--sans); cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all 0.15s; padding: 5px 14px 6px; }
+.period-tab-label { font-size: 12px; font-weight: 500; }
+.period-tab-hours { font-size: 9.5px; font-weight: 500; opacity: 0.75; letter-spacing: 0.01em; }
+.period-tab.active .period-tab-label { font-weight: 600; }
 
 /* ── Park Guide experiment: sticky restaurant card matches the search
    bar's muted sage-green (not the solid forest header) with light text.
@@ -512,7 +515,17 @@ html, body {
 
 // ── STATE ──────────────────────────────────────────────
 const APP_VERSION = 'v19'; // bump this ONE place — loading screen and header tag both read from it
-let RESTAURANTS = [], MENUS = [], REST_MAP = {}, MENU_MAP = {};
+// RESTAURANTS/REST_MAP: full records, ~1.5MB for 436 rows — cheap, stay in memory.
+// SEARCH_INDEX: slim per-item projection (12 of 29 fields) used ONLY for search
+// matching/rendering and the festival/price-change special views. Full item
+// records (description, category, etc.) live in IndexedDB and are queried by
+// restaurant_id only when a specific menu is opened (showMenu) — this is what
+// avoids parsing/holding the full ~36MB menu dataset on every load.
+let RESTAURANTS = [], SEARCH_INDEX = [], REST_MAP = {};
+let FEST_COUNT = 0, PRICE_CHANGE_COUNT = 0;
+// { [restaurant_id]: { [date]: {periods:[...], open, close, closed_flag?, refurbishment_flag?} } },
+// or {} if no hours data was available (older manifest, or fetch never ran).
+let HOURS_DATA = {};
 let userLat = null, userLng = null;
 let proximityActive = false;
 let locationPermission = 'unknown';
@@ -534,7 +547,17 @@ const filters = {
   style: new Set(), price: new Set(), dietary: new Set(),
 };
 
-const PERIOD_ORDER = ['Breakfast','Brunch','Lunch','Dinner','All Day','Lounge','Snack'];
+// Whitelist of dining_period values recognized as real tabs. Disney's API
+// reports several venues under compound/alternate labels instead of the
+// plain Breakfast/Lunch/Dinner set (e.g. "Lunch And Dinner" for venues that
+// don't split those two) — anything not listed here silently vanishes from
+// showMenu(): it get excluded from the period-tab set, and if that leaves
+// only one recognized period, no tabs render at all and the unrecognized
+// period's items never display, at any time of day (confirmed bug via The
+// Friar's Nook, facility 114690 — affected 33 restaurants as of 2026-07-14).
+const PERIOD_ORDER = ['Breakfast','Brunch','Lunch','Lunch And Dinner','Dinner',
+  'Late Night Dining','All Day','Lounge','Bar – Lounge','Pool Bar',
+  'Pool Bar and Grill','Coffee – Bakery','Snack','Special','Special Ticketed Event'];
 
 const LOC_TAGS = [
   { tag: 'magic-kingdom',     label: 'Magic Kingdom',     abbr: 'MK' },
@@ -571,8 +594,42 @@ const DIETARY_FILTERS = [
 
 // ── UTILS ──────────────────────────────────────────────
 const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// NFD decomposes accented chars into base letter + combining mark; the regex
+// strips the mark, so "citricos"/"Citricos"/"Cítricos" all normalize the same
+// regardless of which one was typed. Applied to both sides of every match.
+function normalizeForSearch(str){
+  return (str||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+}
 function dist(la1,lo1,la2,lo2){const R=3958.8,dL=(la2-la1)*Math.PI/180,dO=(lo2-lo1)*Math.PI/180,a=Math.sin(dL/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dO/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
 const fmtDist = m => m < 0.1 ? Math.round(m*5280)+' ft' : m.toFixed(1)+' mi';
+// "HH:MM" 24h -> "h:mm AM/PM". fetch_hours.py expresses past-midnight
+// overnight hours as hours beyond 24 ("25:30" = 1:30 AM the next day) so a
+// single park-day row can express e.g. 7 AM-1 AM without date math — mod 24
+// here to fold that back into a normal clock time for display.
+function fmtTime12h(hhmm){
+  if(!hhmm) return '';
+  const [h,m] = hhmm.split(':').map(Number);
+  const h24 = h % 24;
+  const period = h24 < 12 ? 'AM' : 'PM';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h12}:${String(m).padStart(2,'0')} ${period}`;
+}
+function fmtHoursRange(start,end){
+  if(!start||!end) return '';
+  return `${fmtTime12h(start)} – ${fmtTime12h(end)}`;
+}
+// Resolves today's hours entry for a restaurant against the real park date
+// in America/New_York (fetch_hours.py's TZ) — NOT the visitor's local date,
+// so this stays correct regardless of what timezone the phone is set to.
+// Returns null when there's simply no data to show (missing from Disney's
+// calendar feed entirely, or today falls outside the cached rolling
+// window) — callers treat null as "omit this", never as an error.
+function getTodayHours(restaurantId){
+  const days = HOURS_DATA[restaurantId];
+  if(!days) return null;
+  const todayKey = new Intl.DateTimeFormat('en-CA', {timeZone:'America/New_York'}).format(new Date());
+  return days[todayKey] || null;
+}
 function highlightMatch(text,q){if(!text||!q)return esc(text);const i=text.toLowerCase().indexOf(q.toLowerCase());if(i===-1)return esc(text);return esc(text.slice(0,i))+'<em>'+esc(text.slice(i,i+q.length))+'</em>'+esc(text.slice(i+q.length));}
 const filterCount = () => Object.values(filters).reduce((n,s)=>n+s.size,0);
 function locationLabel(r){if(!r)return '';if(r.tags?.includes('water-park')){const l=LOC_TAGS.find(x=>x.tag==='water-park');return[l?.abbr||'WP',waterParkName(r)].filter(Boolean).join(' · ');}if(r.park){const l=LOC_TAGS.find(x=>r.tags?.includes(x.tag));return[l?.abbr||r.park,r.area].filter(Boolean).join(' · ');}if(r.resort)return r.resort;return r.area||'';}
@@ -793,20 +850,174 @@ if(window.visualViewport){
 document.addEventListener('focusout', ()=>{ setTimeout(unshoveViewport, 60); });
 
 // ── DATA LOAD ──────────────────────────────────────────
-async function loadData(){
+// Client side of publish_data.py's manifest contract: data/data_manifest.json
+// is the one small, always-fresh URL polled on a cadence; it points at
+// content-hashed data files (immutable per hash — a changed file is a new
+// URL, so nothing can serve stale bytes under an old one). Full menu items
+// are imported into IndexedDB once per data change; everyday loads read the
+// small SEARCH_INDEX/RESTAURANTS projection straight out of IDB metadata
+// with zero network calls and zero re-parsing of the full dataset.
+const IDB_NAME = 'wienie_dining', IDB_VERSION = 1;
+const IDB_STORE_ITEMS = 'menu_items', IDB_STORE_META = 'meta';
+// iOS Safari has no Periodic Background Sync, so "once daily" has to be a
+// foreground check gated by a stored timestamp, not a true background job.
+const DATA_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+// Fields the search UI and special views (festival/price-changes) actually
+// read — see renderResults/renderItemRow/buildHomeCards/showFestivalItems/
+// showPriceChanges. Everything else (description, category, provenance
+// fields, etc.) is only needed once a specific restaurant's menu is opened,
+// and is fetched from IndexedDB by restaurant_id at that point instead.
+function toSearchIndexEntry(item){
+  return {
+    restaurant_id: item.restaurant_id,
+    item: item.item,
+    _norm: normalizeForSearch(item.item),
+    price_display: item.price_display,
+    price_changed: item.price_changed,
+    previous_price: item.previous_price,
+    show_in_menu: item.show_in_menu,
+    is_festival_item: item.is_festival_item,
+    dining_period: item.dining_period,
+    norm_categories: item.norm_categories,
+    is_kids: item.is_kids,
+    is_allergy_friendly: item.is_allergy_friendly,
+    has_allergy_option: item.has_allergy_option,
+  };
+}
+
+function openMenuDB(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = ()=>{
+      const db = req.result;
+      if(!db.objectStoreNames.contains(IDB_STORE_ITEMS)){
+        // item_id is NOT unique across the dataset (same Disney item can be
+        // fetched under multiple facility queries) — auto-incrementing keys
+        // avoid silently dropping records; nothing ever queries by primary
+        // key directly, only by the restaurant_id index below.
+        const store = db.createObjectStore(IDB_STORE_ITEMS, {autoIncrement:true});
+        store.createIndex('restaurant_id','restaurant_id',{unique:false});
+      }
+      if(!db.objectStoreNames.contains(IDB_STORE_META)){
+        db.createObjectStore(IDB_STORE_META, {keyPath:'key'});
+      }
+    };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+function idbGet(db,store,key){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(store,'readonly').objectStore(store).get(key);
+    tx.onsuccess=()=>resolve(tx.result);
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+function idbPut(db,store,value){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(store,'readwrite').objectStore(store).put(value);
+    tx.onsuccess=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+function idbGetAllByIndex(db,store,indexName,key){
+  return new Promise((resolve,reject)=>{
+    const req=db.transaction(store,'readonly').objectStore(store).index(indexName).getAll(key);
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+function idbReplaceAll(db,store,records){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(store,'readwrite');
+    const os=tx.objectStore(store);
+    os.clear();
+    for(const r of records) os.put(r);
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+
+// Loads RESTAURANTS/SEARCH_INDEX/FEST_COUNT/PRICE_CHANGE_COUNT from the meta
+// store — used whenever the check is skipped or the manifest is unchanged.
+async function loadFromCache(db){
+  const [restMeta, searchMeta, statsMeta, hoursMeta] = await Promise.all([
+    idbGet(db, IDB_STORE_META, 'restaurants'),
+    idbGet(db, IDB_STORE_META, 'search_index'),
+    idbGet(db, IDB_STORE_META, 'stats'),
+    idbGet(db, IDB_STORE_META, 'hours'),
+  ]);
+  RESTAURANTS = restMeta?.value || [];
+  SEARCH_INDEX = searchMeta?.value || [];
+  REST_MAP = Object.fromEntries(RESTAURANTS.map(r=>[r.restaurant_id,r]));
+  FEST_COUNT = statsMeta?.value?.festCount || 0;
+  PRICE_CHANGE_COUNT = statsMeta?.value?.priceChanges || 0;
+  HOURS_DATA = hoursMeta?.value?.restaurants || {};
+}
+
+async function importFreshData(db, manifest){
+  const fetches = [
+    fetch(`data/${manifest.restaurant_data}`).then(r=>r.json()),
+    fetch(`data/${manifest.menu_data}`).then(r=>r.json()),
+  ];
+  // manifest.hours_data may be absent on an older cached manifest that
+  // predates this being published — treat that as "no hours data" rather
+  // than failing the whole load.
+  const [rData, mData, hData] = await Promise.all([
+    ...fetches,
+    manifest.hours_data ? fetch(`data/${manifest.hours_data}`).then(r=>r.json()) : Promise.resolve(null),
+  ]);
+  RESTAURANTS = rData.filter(r=>r.show_in_app);
+  for(const r of RESTAURANTS) r._norm = normalizeForSearch(r.restaurant);
+  REST_MAP = Object.fromEntries(RESTAURANTS.map(r=>[r.restaurant_id,r]));
+  SEARCH_INDEX = mData.map(toSearchIndexEntry);
+  FEST_COUNT = mData.filter(m=>m.is_festival_item&&m.show_in_menu).length;
+  PRICE_CHANGE_COUNT = mData.filter(m=>m.show_in_menu&&m.price_changed).length;
+  HOURS_DATA = hData?.restaurants || {};
+
+  await idbReplaceAll(db, IDB_STORE_ITEMS, mData);
+  await Promise.all([
+    idbPut(db, IDB_STORE_META, {key:'restaurants', value:RESTAURANTS}),
+    idbPut(db, IDB_STORE_META, {key:'search_index', value:SEARCH_INDEX}),
+    idbPut(db, IDB_STORE_META, {key:'stats', value:{festCount:FEST_COUNT, priceChanges:PRICE_CHANGE_COUNT}}),
+    idbPut(db, IDB_STORE_META, {key:'hours', value:hData}),
+    idbPut(db, IDB_STORE_META, {key:'manifest', value:manifest}),
+    idbPut(db, IDB_STORE_META, {key:'last_checked', value: Date.now()}),
+  ]);
+}
+
+async function checkAndLoadData(){
   try {
-    const [rData,mData] = await Promise.all([
-      fetch('restaurant_data_normalized.json').then(r=>r.json()),
-      fetch('menu_data_normalized.json').then(r=>r.json()),
+    const db = await openMenuDB();
+    const [lastCheckedRow, manifestRow] = await Promise.all([
+      idbGet(db, IDB_STORE_META, 'last_checked'),
+      idbGet(db, IDB_STORE_META, 'manifest'),
     ]);
-    RESTAURANTS = rData.filter(r=>r.show_in_app);
-    MENUS = mData;
-    REST_MAP = Object.fromEntries(RESTAURANTS.map(r=>[r.restaurant_id,r]));
-    MENU_MAP = {};
-    for(const item of MENUS){
-      if(!MENU_MAP[item.restaurant_id]) MENU_MAP[item.restaurant_id]=[];
-      MENU_MAP[item.restaurant_id].push(item);
+    const haveCache = !!manifestRow;
+    const dueForCheck = !haveCache || !lastCheckedRow ||
+      (Date.now() - lastCheckedRow.value) >= DATA_CHECK_INTERVAL_MS;
+
+    if(haveCache && !dueForCheck){
+      await loadFromCache(db);
+      init();
+      return;
     }
+
+    const manifest = await fetch('data/data_manifest.json').then(r=>r.json());
+    const unchanged = haveCache &&
+      manifestRow.value.restaurant_data === manifest.restaurant_data &&
+      manifestRow.value.menu_data === manifest.menu_data &&
+      manifestRow.value.hours_data === manifest.hours_data;
+
+    if(unchanged){
+      await idbPut(db, IDB_STORE_META, {key:'last_checked', value: Date.now()});
+      await loadFromCache(db);
+      init();
+      return;
+    }
+
+    await importFreshData(db, manifest);
     init();
   } catch(e){
     document.getElementById('loading-sub').textContent='Could not load data. Are files in the same folder?';
@@ -997,8 +1208,8 @@ function showView(name){
 
 // ── HOME CARDS ─────────────────────────────────────────
 function buildHomeCards(){
-  const festCount=MENUS.filter(m=>m.is_festival_item&&m.show_in_menu).length;
-  const priceChanges=MENUS.filter(m=>m.show_in_menu&&m.price_changed).length;
+  const festCount=FEST_COUNT;
+  const priceChanges=PRICE_CHANGE_COUNT;
 
   const cards=[
     {icon:'⊕',label:locationPermission==='denied'&&!userLat?'Enable Location to Search Nearby':'Near Me',
@@ -1176,21 +1387,33 @@ function showRestaurantList(locTag,area){
 }
 
 // ── MENU VIEW ──────────────────────────────────────────
-function showMenu(restaurantId,scrollToItem,period){
+// Full item records (description, category, etc.) live only in IndexedDB —
+// fetched here by restaurant_id on demand (typically 100–500 items), never
+// held in memory for the whole dataset at once.
+async function showMenu(restaurantId,scrollToItem,period){
   const r=REST_MAP[restaurantId];if(!r)return;
   currentRestId=restaurantId;highlightItem=scrollToItem;
 
   document.getElementById('menu-rest-name').textContent=r.restaurant;
+  const todayHours = getTodayHours(restaurantId);
   const metaParts=[locationLabel(r)];
   if(r.price_tier) metaParts.push('$'.repeat(r.price_tier));
   if(r.experience_type) metaParts.push(r.experience_type);
+  if(todayHours?.closed_flag||todayHours?.refurbishment_flag) metaParts.push('Closed Today');
+  else if(todayHours?.open&&todayHours?.close) metaParts.push(fmtHoursRange(todayHours.open,todayHours.close));
   document.getElementById('menu-rest-meta').textContent=metaParts.join(' · ');
 
   const infoBtn=document.getElementById('menu-info-btn');
   if(r.lat&&r.lng){infoBtn.style.display='flex';infoBtn.onclick=()=>showMapsCard(r);}
   else infoBtn.style.display='none';
 
-  const allItems=(MENU_MAP[restaurantId]||[]).filter(i=>i.show_in_menu);
+  const db = await openMenuDB();
+  const restaurantItems = await idbGetAllByIndex(db, IDB_STORE_ITEMS, 'restaurant_id', restaurantId);
+  // Guard against a race: if the user tapped a different restaurant while
+  // this lookup was in flight, currentRestId has already moved on — don't
+  // let a stale response overwrite whatever's now on screen.
+  if(currentRestId!==restaurantId) return;
+  const allItems=restaurantItems.filter(i=>i.show_in_menu);
 
   // When jumping to a specific item from search, the target item's OWN
   // dining_period takes priority over any explicit period arg or the
@@ -1214,7 +1437,16 @@ function showMenu(restaurantId,scrollToItem,period){
 
   const tabsWrap=document.getElementById('period-tabs-wrap');
   if(showPeriods.length>1){
-    tabsWrap.innerHTML=`<div class="period-tabs">${showPeriods.map(p=>`<button class="period-tab${p===currentPeriod?' active':''}" data-p="${esc(p)}">${esc(p)}</button>`).join('')}</div>`;
+    // Per-period hours underneath each pill, sourced from today's own hours
+    // entry — skipped for 'All Day' (its hours are already redundant with
+    // the meta line's day-level hours) and omitted (not shown as blank/
+    // wrong) if this period isn't present in today's calendar data, since
+    // the menu feed and hours feed are fetched independently and can drift.
+    tabsWrap.innerHTML=`<div class="period-tabs">${showPeriods.map(p=>{
+      const periodHours = p!=='All Day' ? todayHours?.periods?.find(x=>x.period===p) : null;
+      const hoursLine = periodHours ? `<span class="period-tab-hours">${esc(fmtHoursRange(periodHours.start,periodHours.end))}</span>` : '';
+      return `<button class="period-tab${p===currentPeriod?' active':''}" data-p="${esc(p)}"><span class="period-tab-label">${esc(p)}</span>${hoursLine}</button>`;
+    }).join('')}</div>`;
     tabsWrap.querySelectorAll('.period-tab').forEach(btn=>{
       btn.addEventListener('click',()=>showMenu(restaurantId,null,btn.dataset.p));
     });
@@ -1234,7 +1466,13 @@ function showMenu(restaurantId,scrollToItem,period){
   const groups={};
   for(const item of displayItems){
     const gk=(item.group_display_order??99)+'|'+(item.category_group||'other');
-    if(!groups[gk]) groups[gk]={order:item.group_display_order??99,groupName:item.category_group||'other',cats:{}};
+    if(!groups[gk]) groups[gk]={order:item.group_display_order??99,groupName:item.category_group||'other',rawLabel:null,cats:{}};
+    // Prefer the real, correctly-accented `category` string over decoding
+    // `category_group` — the backend's slugifier drops accented characters
+    // when building that slug (e.g. "Entrées" -> "entr-es"), so reversing it
+    // ("entr-es" -> "Entr Es") reproduces the corruption instead of fixing
+    // it. `category` was never slugified, so it's already correct as-is.
+    if(!groups[gk].rawLabel && item.category) groups[gk].rawLabel=item.category.trim();
     const cat=item.category||item.category_group||'';
     if(!groups[gk].cats[cat]) groups[gk].cats[cat]=[];
     groups[gk].cats[cat].push(item);
@@ -1242,7 +1480,7 @@ function showMenu(restaurantId,scrollToItem,period){
   const sortedGroups=Object.values(groups).sort((a,b)=>a.order-b.order);
   let html='';
   for(const g of sortedGroups){
-    const displayGroup=g.groupName.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    const displayGroup=g.rawLabel || g.groupName.replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
     let gHtml='';
     for(const[cat,catItems] of Object.entries(g.cats)){
       const showSub=cat&&cat.toLowerCase()!==g.groupName.toLowerCase()&&cat.toLowerCase()!==g.groupName.replace(/-/g,' ').toLowerCase();
@@ -1384,6 +1622,7 @@ let forcedTypeBrowse = null; // { qLow, label } | null
 
 function renderResults(q){
   const qLow=(q||'').toLowerCase().trim();
+  const qNorm=normalizeForSearch(q).trim();
   const filteredRests=getFilteredRestaurants();
   const filteredRestIds=new Set(filteredRests.map(r=>r.restaurant_id));
 
@@ -1408,7 +1647,7 @@ function renderResults(q){
   } else if(qLow){
     for(const r of filteredRests){
       if(restSeen.has(r.restaurant_id))continue;
-      if(r.restaurant?.toLowerCase().includes(qLow)||(r.tags?.includes('water-park')?waterParkName(r):r.area)?.toLowerCase().includes(qLow)){restMatches.push(r);restSeen.add(r.restaurant_id);}
+      if(r._norm?.includes(qNorm)||(r.tags?.includes('water-park')?waterParkName(r):r.area)?.toLowerCase().includes(qLow)){restMatches.push(r);restSeen.add(r.restaurant_id);}
     }
   } else if(filterCount()>0){
     // Filters active but no search text — this is "show me everything
@@ -1431,7 +1670,7 @@ function renderResults(q){
   const hasItemLevelFilter = filters.food.size>0 || filters.meal.size>0 || filters.dietary.size>0;
   const skipItemMatching = isBrowseMode && !hasItemLevelFilter;
 
-  let itemBase = skipItemMatching ? [] : MENUS.filter(i=>{
+  let itemBase = skipItemMatching ? [] : SEARCH_INDEX.filter(i=>{
     if(useAllergyRows){if(!i.is_allergy_friendly)return false;}
     else{if(!i.show_in_menu)return false;}
     if(!filteredRestIds.has(i.restaurant_id))return false;
@@ -1445,7 +1684,7 @@ function renderResults(q){
   // Normal substring matching runs whenever there's text, UNLESS browse
   // mode is actively confirmed (isForcedBrowse) — at that point items are
   // already suppressed above via skipItemMatching, so itemBase is empty.
-  let itemMatchesRaw=(qLow && !isForcedBrowse)?itemBase.filter(i=>i.item?.toLowerCase().includes(qLow)):itemBase;
+  let itemMatchesRaw=(qLow && !isForcedBrowse)?itemBase.filter(i=>i._norm?.includes(qNorm)):itemBase;
 
   const seenKey=new Set();
   const itemMatches=[];
@@ -1462,8 +1701,8 @@ function renderResults(q){
     restMatches.sort((a,b)=>(distCache[a.restaurant_id]??999)-(distCache[b.restaurant_id]??999));
     itemMatches.sort((a,b)=>(distCache[a.restaurant_id]??999)-(distCache[b.restaurant_id]??999));
   } else {
-    restMatches.sort((a,b)=>{const aS=a.restaurant?.toLowerCase().startsWith(qLow)?0:1,bS=b.restaurant?.toLowerCase().startsWith(qLow)?0:1;return aS-bS||a.restaurant?.localeCompare(b.restaurant);});
-    itemMatches.sort((a,b)=>{const aS=a.item?.toLowerCase().startsWith(qLow)?0:1,bS=b.item?.toLowerCase().startsWith(qLow)?0:1;return aS-bS||a.item?.localeCompare(b.item);});
+    restMatches.sort((a,b)=>{const aS=a._norm?.startsWith(qNorm)?0:1,bS=b._norm?.startsWith(qNorm)?0:1;return aS-bS||a.restaurant?.localeCompare(b.restaurant);});
+    itemMatches.sort((a,b)=>{const aS=a._norm?.startsWith(qNorm)?0:1,bS=b._norm?.startsWith(qNorm)?0:1;return aS-bS||a.item?.localeCompare(b.item);});
   }
 
   const total=restMatches.length+itemMatches.length;
@@ -1777,11 +2016,11 @@ function showNearbyRestaurants(){
   requestAnimationFrame(layoutPlanes);
 }
 function showFestivalItems(){
-  const items=MENUS.filter(i=>i.is_festival_item&&i.show_in_menu);
+  const items=SEARCH_INDEX.filter(i=>i.is_festival_item&&i.show_in_menu);
   renderSpecialList(items,'🎪 Festival items',`${items.length} special items`);
 }
 function showPriceChanges(){
-  const items=MENUS.filter(i=>i.show_in_menu&&i.price_changed);
+  const items=SEARCH_INDEX.filter(i=>i.show_in_menu&&i.price_changed);
   renderSpecialList(items,'🔄 Price changes',`${items.length} items updated recently`);
 }
 function renderSpecialList(items,heading,countText){
@@ -1840,25 +2079,15 @@ function hideMapsCard(){
 }
 
 // ── BOOT ───────────────────────────────────────────────
-// SW registration disabled during active dev — and actively UNREGISTERED,
-// because commenting out register() does nothing for a worker that's
-// already installed on the device (hence the manual cache-clearing pain).
-// This plus the kill-switch sw.js clears existing installs automatically.
-// Re-enable the registration block only once dev churn settles.
+// Real SW re-enabled — it only caches the app shell (see sw.js), never the
+// data/*.json files, so it can't serve stale data; freshness there is owned
+// entirely by checkAndLoadData()'s manifest check above.
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.getRegistrations().then(regs=>{
-    regs.forEach(reg=>reg.unregister());
-  });
-  if(window.caches){
-    caches.keys().then(keys=>keys.forEach(k=>caches.delete(k)));
-  }
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(err=>console.warn('SW registration failed',err)));
 }
-// if('serviceWorker' in navigator){
-//   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(err=>console.warn('SW registration failed',err)));
-// }
 document.getElementById('app-version').textContent = APP_VERSION;
 document.getElementById('header-version').textContent = APP_VERSION;
-loadData();
+checkAndLoadData();
 </script>
 </body>
 </html>
