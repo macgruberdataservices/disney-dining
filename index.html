@@ -124,7 +124,7 @@ html, body {
    pins sticky children of a padded scroller at (scroller padding + top)
    instead of just (top) — doubling the offset. Keeping #main padding-free
    makes --menu-sticky-top mean what it says. */
-#view-home, #view-browse, #view-menu { padding-top: var(--plane-clearance, 0px); }
+#view-home, #view-browse, #view-menu, #view-changes { padding-top: var(--plane-clearance, 0px); }
 #view-home { display: none; }
 #view-home.active { display: block; }
 .home-greeting { padding: 20px 16px 4px; font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ink); letter-spacing: -0.01em; text-align: center; }
@@ -166,6 +166,38 @@ html, body {
 
 #view-menu { display: none; }
 #view-menu.active { display: block; }
+
+#view-changes { display: none; }
+#view-changes.active { display: block; }
+.changes-controls { padding: 16px 16px 4px; display: flex; flex-direction: column; gap: 10px; }
+.changes-quickrange { display: flex; gap: 8px; }
+.changes-quickrange button {
+  flex: 1; padding: 10px 12px; border-radius: 999px; border: 1.5px solid var(--border);
+  background: var(--surface); color: var(--ink); font-family: var(--sans); font-size: 13px;
+  font-weight: 600; cursor: pointer; transition: all 0.12s;
+}
+.changes-quickrange button.active { background: var(--pine); border-color: var(--pine); color: #fff; }
+.changes-customrange { display: none; gap: 8px; align-items: center; }
+.changes-customrange.visible { display: flex; }
+.changes-customrange input[type="date"] {
+  flex: 1; padding: 8px 10px; border-radius: var(--r-sm); border: 1.5px solid var(--border);
+  background: var(--surface); color: var(--ink); font-family: var(--sans); font-size: 13px;
+}
+.changes-customrange span { color: var(--muted); font-size: 12px; }
+.changes-apply-btn {
+  padding: 8px 14px; border-radius: var(--r-sm); border: none; background: var(--gold);
+  color: #fff; font-weight: 600; font-size: 13px; cursor: pointer;
+}
+.changes-category { margin-top: 6px; }
+.changes-category-hd { padding: 14px 16px 6px; display: flex; align-items: baseline; gap: 8px; }
+.changes-category-title { font-family: var(--serif); font-size: 18px; font-weight: 500; color: var(--ink); letter-spacing: -0.01em; }
+.changes-category-count { font-size: 12px; color: var(--muted); }
+.changes-empty { padding: 4px 16px 12px; font-size: 12px; color: var(--muted); }
+.changes-group-hd { padding: 10px 16px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.changes-group-chevron { display: inline-block; transition: transform 0.15s; font-size: 10px; color: var(--dim); }
+.changes-group-hd.expanded .changes-group-chevron { transform: rotate(90deg); }
+.changes-group-count { color: var(--dim); font-weight: 500; text-transform: none; letter-spacing: normal; }
+.changes-row-date { font-size: 11px; color: var(--dim); flex-shrink: 0; }
 #menu-sticky-stack {
   position: sticky;
   top: var(--menu-sticky-top, 0);
@@ -458,6 +490,26 @@ html, body {
     </div>
     <div id="menu-content"></div>
   </div>
+
+  <div id="view-changes">
+    <div class="list-section-hd">
+      <div class="list-section-title">See Changes</div>
+      <div class="list-section-sub">Menu updates, price changes, and restaurant openings/closures</div>
+    </div>
+    <div class="changes-controls">
+      <div class="changes-quickrange">
+        <button id="changes-quick-week" class="active">Last Week</button>
+        <button id="changes-quick-custom">Custom range</button>
+      </div>
+      <div class="changes-customrange" id="changes-custom-row">
+        <input type="date" id="changes-from">
+        <span>to</span>
+        <input type="date" id="changes-to">
+        <button class="changes-apply-btn" id="changes-apply-btn">Apply</button>
+      </div>
+    </div>
+    <div id="changes-results"></div>
+  </div>
 </div>
 
 <div id="results-plane">
@@ -514,7 +566,7 @@ html, body {
 'use strict';
 
 // ── STATE ──────────────────────────────────────────────
-const APP_VERSION = 'v19'; // bump this ONE place — loading screen and header tag both read from it
+const APP_VERSION = 'v20'; // bump this ONE place — loading screen and header tag both read from it
 // RESTAURANTS/REST_MAP: full records, ~1.5MB for 436 rows — cheap, stay in memory.
 // SEARCH_INDEX: slim per-item projection (12 of 29 fields) used ONLY for search
 // matching/rendering and the festival/price-change special views. Full item
@@ -522,7 +574,7 @@ const APP_VERSION = 'v19'; // bump this ONE place — loading screen and header 
 // restaurant_id only when a specific menu is opened (showMenu) — this is what
 // avoids parsing/holding the full ~36MB menu dataset on every load.
 let RESTAURANTS = [], SEARCH_INDEX = [], REST_MAP = {};
-let FEST_COUNT = 0, PRICE_CHANGE_COUNT = 0;
+let FEST_COUNT = 0;
 // { [restaurant_id]: { [date]: {periods:[...], open, close, closed_flag?, refurbishment_flag?} } },
 // or {} if no hours data was available (older manifest, or fetch never ran).
 let HOURS_DATA = {};
@@ -863,9 +915,9 @@ const IDB_STORE_ITEMS = 'menu_items', IDB_STORE_META = 'meta';
 // foreground check gated by a stored timestamp, not a true background job.
 const DATA_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-// Fields the search UI and special views (festival/price-changes) actually
-// read — see renderResults/renderItemRow/buildHomeCards/showFestivalItems/
-// showPriceChanges. Everything else (description, category, provenance
+// Fields the search UI and special views (festival, inline price-change tag)
+// actually read — see renderResults/renderItemRow/buildHomeCards/
+// showFestivalItems. Everything else (description, category, provenance
 // fields, etc.) is only needed once a specific restaurant's menu is opened,
 // and is fetched from IndexedDB by restaurant_id at that point instead.
 function toSearchIndexEntry(item){
@@ -952,7 +1004,6 @@ async function loadFromCache(db){
   SEARCH_INDEX = searchMeta?.value || [];
   REST_MAP = Object.fromEntries(RESTAURANTS.map(r=>[r.restaurant_id,r]));
   FEST_COUNT = statsMeta?.value?.festCount || 0;
-  PRICE_CHANGE_COUNT = statsMeta?.value?.priceChanges || 0;
   HOURS_DATA = hoursMeta?.value?.restaurants || {};
 }
 
@@ -973,14 +1024,13 @@ async function importFreshData(db, manifest){
   REST_MAP = Object.fromEntries(RESTAURANTS.map(r=>[r.restaurant_id,r]));
   SEARCH_INDEX = mData.map(toSearchIndexEntry);
   FEST_COUNT = mData.filter(m=>m.is_festival_item&&m.show_in_menu).length;
-  PRICE_CHANGE_COUNT = mData.filter(m=>m.show_in_menu&&m.price_changed).length;
   HOURS_DATA = hData?.restaurants || {};
 
   await idbReplaceAll(db, IDB_STORE_ITEMS, mData);
   await Promise.all([
     idbPut(db, IDB_STORE_META, {key:'restaurants', value:RESTAURANTS}),
     idbPut(db, IDB_STORE_META, {key:'search_index', value:SEARCH_INDEX}),
-    idbPut(db, IDB_STORE_META, {key:'stats', value:{festCount:FEST_COUNT, priceChanges:PRICE_CHANGE_COUNT}}),
+    idbPut(db, IDB_STORE_META, {key:'stats', value:{festCount:FEST_COUNT}}),
     idbPut(db, IDB_STORE_META, {key:'hours', value:hData}),
     idbPut(db, IDB_STORE_META, {key:'manifest', value:manifest}),
     idbPut(db, IDB_STORE_META, {key:'last_checked', value: Date.now()}),
@@ -1145,7 +1195,7 @@ function setupSwipeBack(){
   const DIST_THRESHOLD = 70;   // px of horizontal travel to count as intentional
   const ANGLE_RATIO = 2;       // must be this many times more horizontal than vertical
                                  // to disambiguate from a diagonal vertical-scroll drag
-  ['view-browse','view-menu'].forEach(id=>{
+  ['view-browse','view-menu','view-changes'].forEach(id=>{
     const el = document.getElementById(id);
     let startX=0, startY=0, tracking=false;
     el.addEventListener('touchstart', e=>{
@@ -1191,7 +1241,7 @@ function setNav(view,breadLabel){
   else{sep.style.display=breadLabel?'inline':'none';lbl.style.display=breadLabel?'inline':'none';lbl.textContent=breadLabel||'';}
 }
 function showView(name){
-  ['home','browse','menu'].forEach(v=>document.getElementById('view-'+v).classList.remove('active'));
+  ['home','browse','menu','changes'].forEach(v=>document.getElementById('view-'+v).classList.remove('active'));
   if(name!=='search'){
     const el=document.getElementById('view-'+name);
     if(el){
@@ -1209,7 +1259,6 @@ function showView(name){
 // ── HOME CARDS ─────────────────────────────────────────
 function buildHomeCards(){
   const festCount=FEST_COUNT;
-  const priceChanges=PRICE_CHANGE_COUNT;
 
   const cards=[
     {icon:'⊕',label:locationPermission==='denied'&&!userLat?'Enable Location to Search Nearby':'Near Me',
@@ -1226,8 +1275,8 @@ function buildHomeCards(){
      }},
     {icon:'🗺️',label:'Browse',sub:'Parks, resorts & Disney Springs',action:()=>showBrowseHome()},
     festCount>0?{icon:'🎪',label:'Festival',sub:`${festCount} special items`,action:()=>showFestivalItems(),festival:true}:null,
-    {icon:'🔄',label:'Price Changes',sub:priceChanges>0?`${priceChanges} items updated`:'No recent changes',
-     action:()=>showPriceChanges(),disabled:priceChanges===0},
+    {icon:'🔄',label:'See Changes',sub:'Menu updates, prices, openings & closures',
+     action:()=>showChangesHome()},
   ].filter(Boolean);
 
   const container=document.getElementById('home-cards');
@@ -2019,10 +2068,6 @@ function showFestivalItems(){
   const items=SEARCH_INDEX.filter(i=>i.is_festival_item&&i.show_in_menu);
   renderSpecialList(items,'🎪 Festival items',`${items.length} special items`);
 }
-function showPriceChanges(){
-  const items=SEARCH_INDEX.filter(i=>i.show_in_menu&&i.price_changed);
-  renderSpecialList(items,'🔄 Price changes',`${items.length} items updated recently`);
-}
 function renderSpecialList(items,heading,countText){
   document.getElementById('search-input').value='';
   // Special lists (Festival, Price Changes) aren't a "search session" in the
@@ -2052,6 +2097,189 @@ function renderSpecialList(items,heading,countText){
   listEl.innerHTML=html;
   listEl.querySelectorAll('.result-item[data-rid]').forEach(el=>{
     el.addEventListener('click',()=>{browseStack=[];closeSearchSession();showMenu(el.dataset.rid,el.dataset.iname,null);});
+  });
+  requestAnimationFrame(layoutPlanes);
+}
+
+// ── SEE CHANGES ────────────────────────────────────────
+// Reads data/changes_manifest.json + data/changes_YYYY-MM.<hash>.json,
+// built daily by Backend/build_changes_feed.py. Content-hashed like the
+// rest of the data files, so plain fetch() caching is safe — a given
+// hashed URL's content never changes, nothing to invalidate. Manifest
+// itself is small and always re-fetched fresh, same reasoning as
+// data_manifest.json.
+let CHANGES_INITIALIZED = false;
+let CHANGES_MODE = 'week';   // 'week' | 'custom'
+const CHANGES_MONTH_CACHE = {};   // "2026-07" -> parsed events array
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function daysAgoStr(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
+
+function showChangesHome(){
+  setupChangesControls();
+  setNav('changes','');showView('changes');
+  const [from,to]=CHANGES_MODE==='week'?[daysAgoStr(6),todayStr()]:[document.getElementById('changes-from').value,document.getElementById('changes-to').value];
+  if(from&&to) loadChangesForRange(from,to);
+}
+
+function setupChangesControls(){
+  if(CHANGES_INITIALIZED) return;
+  CHANGES_INITIALIZED=true;
+  const weekBtn=document.getElementById('changes-quick-week');
+  const customBtn=document.getElementById('changes-quick-custom');
+  const customRow=document.getElementById('changes-custom-row');
+  const fromInput=document.getElementById('changes-from');
+  const toInput=document.getElementById('changes-to');
+  fromInput.value=daysAgoStr(29);
+  toInput.value=todayStr();
+
+  weekBtn.addEventListener('click',()=>{
+    CHANGES_MODE='week';
+    weekBtn.classList.add('active');customBtn.classList.remove('active');
+    customRow.classList.remove('visible');
+    loadChangesForRange(daysAgoStr(6),todayStr());
+  });
+  customBtn.addEventListener('click',()=>{
+    CHANGES_MODE='custom';
+    customBtn.classList.add('active');weekBtn.classList.remove('active');
+    customRow.classList.add('visible');
+  });
+  document.getElementById('changes-apply-btn').addEventListener('click',()=>{
+    const from=fromInput.value,to=toInput.value;
+    if(!from||!to||from>to){alert('Pick a valid date range (from must be on or before to).');return;}
+    loadChangesForRange(from,to);
+  });
+}
+
+function monthsInRange(from,to){
+  const months=[];
+  const d=new Date(from+'T00:00:00');
+  const end=new Date(to+'T00:00:00');
+  while(d<=end){
+    months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+    d.setMonth(d.getMonth()+1);
+  }
+  return [...new Set(months)];
+}
+
+async function loadChangesForRange(from,to){
+  const container=document.getElementById('changes-results');
+  container.innerHTML='<div class="changes-empty">Loading…</div>';
+  try{
+    const manifest=await fetch('data/changes_manifest.json').then(r=>r.json());
+    const months=monthsInRange(from,to).filter(m=>manifest.months?.[m]);
+    const fetches=months.map(async m=>{
+      if(!CHANGES_MONTH_CACHE[m]){
+        const hashed=manifest.months[m];
+        const data=await fetch(`data/${hashed}`).then(r=>r.json());
+        CHANGES_MONTH_CACHE[m]=data.events;
+      }
+      return CHANGES_MONTH_CACHE[m];
+    });
+    const events=(await Promise.all(fetches)).flat().filter(e=>e.date>=from&&e.date<=to);
+    const spanDays=(new Date(to+'T00:00:00')-new Date(from+'T00:00:00'))/86400000;
+    renderChangesResults(events, spanDays<7 ? 'day' : 'week');
+  }catch(e){
+    container.innerHTML='<div class="changes-empty">Could not load changes. Try again later.</div>';
+    console.error(e);
+  }
+}
+
+function mondayOf(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const day=d.getDay();   // 0=Sun..6=Sat
+  const diff=(day===0?-6:1)-day;
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().slice(0,10);
+}
+function formatDateLabel(dateStr){
+  return new Date(dateStr+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+
+function changesRowLine(e){
+  switch(e.category){
+    case 'restaurant_added':
+      return {name:esc(e.restaurant||'(unknown)'),sub:'New — tap to see the menu'};
+    case 'restaurant_closed':
+      return {name:esc(e.restaurant||'(unknown)'),sub:'Appears to have closed'};
+    case 'menu_item_added':
+      return {name:esc(e.item||'(unnamed item)'),sub:`Added at ${esc(e.restaurant||'')}${e.price?` · ${esc(e.price)}`:''}`};
+    case 'menu_item_removed':
+      return {name:esc(e.item||'(unnamed item)'),sub:`Removed from ${esc(e.restaurant||'')}${e.last_price?` · was ${esc(e.last_price)}`:''}`};
+    case 'price_change': {
+      const priceLine=`$${(e.old_price??0).toFixed(2)} → $${(e.new_price??0).toFixed(2)}`;
+      // A handful of price_change events carry no item name (a real gap in
+      // the upstream fetcher's item-name capture for that menu entry, not
+      // a display bug) -- fall back to the restaurant as the headline
+      // instead of showing a blank name.
+      return e.item
+        ? {name:esc(e.item),sub:`${esc(e.restaurant||'')} · ${priceLine}`}
+        : {name:esc(e.restaurant||'(unknown)'),sub:`Price updated · ${priceLine}`};
+    }
+    default:
+      return {name:esc(e.restaurant||e.item||'Change'),sub:''};
+  }
+}
+
+function renderGroupedEvents(events,groupMode){
+  if(!events.length) return '<div class="changes-empty">No changes in this range.</div>';
+  const groups=new Map();
+  for(const e of events){
+    const key=groupMode==='day'?e.date:mondayOf(e.date);
+    if(!groups.has(key)) groups.set(key,[]);
+    groups.get(key).push(e);
+  }
+  const sortedKeys=[...groups.keys()].sort((a,b)=>b.localeCompare(a));
+  return sortedKeys.map(key=>{
+    const hd=groupMode==='day'?formatDateLabel(key):`Week of ${formatDateLabel(key)}`;
+    const rows=groups.get(key).map(e=>{
+      const {name,sub}=changesRowLine(e);
+      const clickable=!!e.restaurant_id;
+      return `<div class="list-row"${clickable?` data-rid="${esc(e.restaurant_id)}" data-iname="${esc(e.item||'')}"`:' style="cursor:default"'}>
+        <div class="list-row-left">
+          <div class="list-row-name">${name}</div>
+          <div class="list-row-sub">${sub}</div>
+        </div>
+        <div class="list-row-right"><span class="changes-row-date">${formatDateLabel(e.date)}</span></div>
+      </div>`;
+    }).join('');
+    const count=groups.get(key).length;
+    return `<div class="changes-group-hd"><span class="changes-group-chevron">▸</span>${esc(hd)} <span class="changes-group-count">(${count})</span></div><div class="list-card" style="display:none">${rows}</div>`;
+  }).join('');
+}
+
+function renderChangesResults(events,groupMode){
+  const sections=[
+    {title:'Restaurants',cats:['restaurant_added','restaurant_closed']},
+    {title:'Menu Changes',cats:['menu_item_added','menu_item_removed']},
+    {title:'Price Changes',cats:['price_change']},
+  ];
+  const html=sections.map(s=>{
+    const items=events.filter(e=>s.cats.includes(e.category));
+    return `<div class="changes-category">
+      <div class="changes-category-hd">
+        <div class="changes-category-title">${esc(s.title)}</div>
+        <div class="changes-category-count">${items.length}</div>
+      </div>
+      ${renderGroupedEvents(items,groupMode)}
+    </div>`;
+  }).join('');
+  const resultsEl=document.getElementById('changes-results');
+  resultsEl.innerHTML=html;
+  resultsEl.querySelectorAll('.list-row[data-rid]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      browseStack=[];
+      showMenu(el.dataset.rid, el.dataset.iname||null, null);
+    });
+  });
+  resultsEl.querySelectorAll('.changes-group-hd').forEach(hd=>{
+    hd.addEventListener('click',()=>{
+      const card=hd.nextElementSibling;
+      const collapsed=card.style.display==='none';
+      card.style.display=collapsed?'block':'none';
+      hd.classList.toggle('expanded',collapsed);
+      requestAnimationFrame(layoutPlanes);
+    });
   });
   requestAnimationFrame(layoutPlanes);
 }
