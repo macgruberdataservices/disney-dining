@@ -199,6 +199,37 @@ html, body {
 .changes-group-hd.expanded .changes-group-chevron { transform: rotate(90deg); }
 .changes-group-count { color: var(--dim); font-weight: 500; text-transform: none; letter-spacing: normal; }
 .changes-row-date { font-size: 11px; color: var(--dim); flex-shrink: 0; }
+.changes-showall-row { display: flex; gap: 8px; padding: 2px 16px 14px; }
+.changes-showall-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  padding: 9px 8px; border-radius: var(--r-sm); border: 1.5px solid var(--pine);
+  background: var(--surface); color: var(--pine); font-family: var(--sans);
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.12s;
+  text-align: center; line-height: 1.3;
+}
+.changes-showall-btn:active { background: var(--pine); color: #fff; }
+.changes-showall-btn .n { color: var(--dim); font-weight: 500; }
+.changes-showall-btn:active .n { color: rgba(255,255,255,0.75); }
+.changes-restaurant-row .list-row-name { display: flex; align-items: baseline; gap: 6px; }
+.changes-restaurant-row .list-row-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.changes-restaurant-row .list-row-arrow { color: var(--dim); font-size: 15px; flex-shrink: 0; }
+.changes-level-header {
+  padding: 14px 16px 10px; display: flex; flex-direction: column; gap: 2px;
+}
+.changes-level-title { font-family: var(--serif); font-size: 20px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+.changes-level-sub { font-size: 12px; color: var(--muted); }
+.changes-cat-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 4px 16px 20px; }
+.changes-cat-tiles.single { grid-template-columns: 1fr; }
+.changes-cat-tile {
+  background: var(--surface); border-radius: var(--r-lg); border: 1.5px solid var(--border);
+  padding: 16px 14px; cursor: pointer; transition: transform 0.12s, border-color 0.12s;
+  display: flex; flex-direction: column; gap: 6px; position: relative; overflow: hidden;
+}
+.changes-cat-tile:active { transform: scale(0.97); border-color: var(--pine); }
+.changes-cat-tile-icon { font-size: 22px; line-height: 1; }
+.changes-cat-tile-label { font-size: 14px; font-weight: 600; color: var(--ink); line-height: 1.2; }
+.changes-cat-tile-count { font-size: 11px; color: var(--muted); }
+.changes-cat-tile-arrow { position: absolute; bottom: 12px; right: 12px; color: var(--dim); font-size: 15px; }
 #menu-sticky-stack {
   position: sticky;
   top: var(--menu-sticky-top, 0);
@@ -494,11 +525,11 @@ html, body {
   </div>
 
   <div id="view-changes">
-    <div class="list-section-hd">
+    <div class="list-section-hd" id="changes-title-block">
       <div class="list-section-title">See Changes</div>
       <div class="list-section-sub">Menu updates, price changes, and restaurant openings/closures</div>
     </div>
-    <div class="changes-controls">
+    <div class="changes-controls" id="changes-controls">
       <div class="changes-quickrange">
         <button id="changes-quick-week" class="active">Last Week</button>
         <button id="changes-quick-custom">Custom range</button>
@@ -1147,7 +1178,24 @@ function setupProximityBtn(){
 
 // ── NAVIGATION ─────────────────────────────────────────
 function goBackOneLevel(){
+  if(currentView==='changes'){
+    // Changes has its own back-stack (changesStack), independent of
+    // browseStack — pop one drill-down level, or fall to Home once
+    // there's nothing left to pop (matches the "no breadcrumb shown at
+    // top level" behavior in showChangesHome()).
+    if(changesStack.length>0){ changesGoBackLevel(); return; }
+    goHome();
+    return;
+  }
   if(currentView==='menu'){
+    if(cameToMenuFromChanges){
+      // Reached this menu from a Changes row (any level) -- return to
+      // Changes exactly where it was left, not climb browseStack (which
+      // is empty/irrelevant here since Changes never populates it).
+      cameToMenuFromChanges=false;
+      renderChangesFromStack();
+      return;
+    }
     // Returning from a menu page: go back to exactly the restaurant list
     // we came from. browseStack still holds [park, area] (or
     // [resort-root, resort]) from when we drilled into the restaurant —
@@ -1239,6 +1287,7 @@ function playSwipeBack(sourceEl){
 }
 function goHome(){
   browseStack=[];currentRestId=null;highlightItem=null;currentPeriod=null;
+  changesStack=[];cameToMenuFromChanges=false;
   closeSearchSession();
   setNav('home');showView('home');
 }
@@ -1447,7 +1496,7 @@ function showRestaurantListByResort(resortName){
     </div>`).join('');
   document.getElementById('browse-list').innerHTML=`<div class="list-card">${rows}</div>`;
   document.querySelectorAll('.list-row[data-rid]').forEach(el=>{
-    el.addEventListener('click',()=>{currentRestId=el.dataset.rid;showMenu(el.dataset.rid,null,null);});
+    el.addEventListener('click',()=>{cameToMenuFromChanges=false;currentRestId=el.dataset.rid;showMenu(el.dataset.rid,null,null);});
   });
   setNav('browse',browseStack[browseStack.length-2]?.label||'Resorts');
   showView('browse');
@@ -1484,7 +1533,7 @@ function showRestaurantList(locTag,area){
     </div>`).join('');
   document.getElementById('browse-list').innerHTML=`<div class="list-card">${rows}</div>`;
   document.querySelectorAll('.list-row[data-rid]').forEach(el=>{
-    el.addEventListener('click',()=>{currentRestId=el.dataset.rid;showMenu(el.dataset.rid,null,null);});
+    el.addEventListener('click',()=>{cameToMenuFromChanges=false;currentRestId=el.dataset.rid;showMenu(el.dataset.rid,null,null);});
   });
   setNav('browse',browseStack[browseStack.length-2]?.label||'Explore');
   showView('browse');
@@ -1616,7 +1665,7 @@ async function showMenu(restaurantId,scrollToItem,period){
     btn.addEventListener('click',e=>{e.stopPropagation();showAfTooltip(btn);});
   });
 
-  const backLabel=browseStack.length>0?(browseStack[browseStack.length-1]?.label||'Back'):'Search';
+  const backLabel=cameToMenuFromChanges?'Changes':(browseStack.length>0?(browseStack[browseStack.length-1]?.label||'Back'):'Search');
   setNav('menu',backLabel);showView('menu');
 
   if(scrollToItem){
@@ -1911,7 +1960,7 @@ function renderResults(q){
   });
 
   listEl.querySelectorAll('.result-rest[data-rid]').forEach(el=>{
-    el.addEventListener('click',()=>{browseStack=[];currentRestId=el.dataset.rid;tuckSearchSession();showMenu(el.dataset.rid,null,null);});
+    el.addEventListener('click',()=>{cameToMenuFromChanges=false;browseStack=[];currentRestId=el.dataset.rid;tuckSearchSession();showMenu(el.dataset.rid,null,null);});
   });
   listEl.querySelectorAll('.result-type').forEach(el=>{
     el.addEventListener('click', ()=>{
@@ -1920,7 +1969,7 @@ function renderResults(q){
     });
   });
   listEl.querySelectorAll('.result-item[data-rid]').forEach(el=>{
-    el.addEventListener('click',()=>{browseStack=[];currentRestId=el.dataset.rid;tuckSearchSession();showMenu(el.dataset.rid,el.dataset.iname,null);});
+    el.addEventListener('click',()=>{cameToMenuFromChanges=false;browseStack=[];currentRestId=el.dataset.rid;tuckSearchSession();showMenu(el.dataset.rid,el.dataset.iname,null);});
   });
   listEl.querySelectorAll('.js-af-badge-result').forEach(btn=>{
     btn.addEventListener('click',e=>{e.stopPropagation();showAfTooltip(btn);});
@@ -2115,7 +2164,7 @@ function showNearbyRestaurants(){
   const listEl=document.getElementById('results-list');
   listEl.innerHTML = html;
   listEl.querySelectorAll('.result-rest[data-rid]').forEach(el=>{
-    el.addEventListener('click',()=>{browseStack=[];currentRestId=el.dataset.rid;tuckSearchSession();showMenu(el.dataset.rid,null,null);});
+    el.addEventListener('click',()=>{cameToMenuFromChanges=false;browseStack=[];currentRestId=el.dataset.rid;tuckSearchSession();showMenu(el.dataset.rid,null,null);});
   });
   requestAnimationFrame(layoutPlanes);
 }
@@ -2151,7 +2200,7 @@ function renderSpecialList(items,heading,countText){
   const listEl=document.getElementById('results-list');
   listEl.innerHTML=html;
   listEl.querySelectorAll('.result-item[data-rid]').forEach(el=>{
-    el.addEventListener('click',()=>{browseStack=[];closeSearchSession();showMenu(el.dataset.rid,el.dataset.iname,null);});
+    el.addEventListener('click',()=>{cameToMenuFromChanges=false;browseStack=[];closeSearchSession();showMenu(el.dataset.rid,el.dataset.iname,null);});
   });
   requestAnimationFrame(layoutPlanes);
 }
@@ -2163,15 +2212,31 @@ function renderSpecialList(items,heading,countText){
 // hashed URL's content never changes, nothing to invalidate. Manifest
 // itself is small and always re-fetched fresh, same reasoning as
 // data_manifest.json.
+//
+// Three drill-down levels, own back-stack (changesStack), independent of
+// browseStack (Browse's park/area/resort stack) since Changes' hierarchy
+// (restaurant -> category -> events) doesn't map onto Browse's. Reuses
+// the app's existing back mechanics rather than inventing new ones:
+// goBackOneLevel() (header breadcrumb + swipe-back, see NAVIGATION
+// section) special-cases currentView==='changes' to pop changesStack
+// instead of browseStack. Tapping into a restaurant's actual menu from
+// any level sets cameToMenuFromChanges so backing out of Menu returns to
+// Changes exactly where it was left, not Home — see showMenu()'s
+// backLabel logic and goBackOneLevel()'s currentView==='menu' branch.
 let CHANGES_INITIALIZED = false;
 let CHANGES_MODE = 'week';   // 'week' | 'custom'
 const CHANGES_MONTH_CACHE = {};   // "2026-07" -> parsed events array
+let CHANGES_CURRENT_EVENTS = [];  // flat events for the currently-loaded range
+let CHANGES_CURRENT_GROUPMODE = 'week';   // 'day' | 'week' -- how far back the range spans
+let changesStack = [];   // [] = top-level results list; each push is one drill-down level
+let cameToMenuFromChanges = false;
 
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function daysAgoStr(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
 
 function showChangesHome(){
   setupChangesControls();
+  changesStack=[];
   setNav('changes','');showView('changes');
   const [from,to]=CHANGES_MODE==='week'?[daysAgoStr(6),todayStr()]:[document.getElementById('changes-from').value,document.getElementById('changes-to').value];
   if(from&&to) loadChangesForRange(from,to);
@@ -2218,6 +2283,9 @@ function monthsInRange(from,to){
 }
 
 async function loadChangesForRange(from,to){
+  changesStack=[];
+  document.getElementById('changes-title-block').style.display='';
+  document.getElementById('changes-controls').style.display='';
   const container=document.getElementById('changes-results');
   container.innerHTML='<div class="changes-empty">Loading…</div>';
   try{
@@ -2233,7 +2301,10 @@ async function loadChangesForRange(from,to){
     });
     const events=(await Promise.all(fetches)).flat().filter(e=>e.date>=from&&e.date<=to);
     const spanDays=(new Date(to+'T00:00:00')-new Date(from+'T00:00:00'))/86400000;
-    renderChangesResults(events, spanDays<7 ? 'day' : 'week');
+    CHANGES_CURRENT_EVENTS=events;
+    CHANGES_CURRENT_GROUPMODE=spanDays<7?'day':'week';
+    setNav('changes','');
+    renderChangesLevel0();
   }catch(e){
     container.innerHTML='<div class="changes-empty">Could not load changes. Try again later.</div>';
     console.error(e);
@@ -2251,22 +2322,31 @@ function formatDateLabel(dateStr){
   return new Date(dateStr+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 }
 
-function changesRowLine(e){
+// opts.hideRestaurant: drop the restaurant name from the sub-label when
+// the surrounding screen already names the restaurant once (Level 2,
+// scoped to a single restaurant) -- repeating it on every row is noise.
+function changesRowLine(e,opts={}){
+  const hideR=!!opts.hideRestaurant;
   switch(e.category){
     case 'restaurant_added':
       return {name:esc(e.restaurant||'(unknown)'),sub:'New — tap to see the menu'};
     case 'restaurant_closed':
       return {name:esc(e.restaurant||'(unknown)'),sub:'Appears to have closed'};
     case 'menu_item_added':
-      return {name:esc(e.item||'(unnamed item)'),sub:`Added at ${esc(e.restaurant||'')}${e.price?` · ${esc(e.price)}`:''}`};
+      return {name:esc(e.item||'(unnamed item)'),sub: hideR
+        ? (e.price?`Added · ${esc(e.price)}`:'Added')
+        : `Added at ${esc(e.restaurant||'')}${e.price?` · ${esc(e.price)}`:''}`};
     case 'menu_item_removed':
-      return {name:esc(e.item||'(unnamed item)'),sub:`Removed from ${esc(e.restaurant||'')}${e.last_price?` · was ${esc(e.last_price)}`:''}`};
+      return {name:esc(e.item||'(unnamed item)'),sub: hideR
+        ? (e.last_price?`Removed · was ${esc(e.last_price)}`:'Removed')
+        : `Removed from ${esc(e.restaurant||'')}${e.last_price?` · was ${esc(e.last_price)}`:''}`};
     case 'price_change': {
       const priceLine=`$${(e.old_price??0).toFixed(2)} → $${(e.new_price??0).toFixed(2)}`;
       // A handful of price_change events carry no item name (a real gap in
       // the upstream fetcher's item-name capture for that menu entry, not
       // a display bug) -- fall back to the restaurant as the headline
       // instead of showing a blank name.
+      if(hideR) return e.item ? {name:esc(e.item),sub:priceLine} : {name:'Price updated',sub:priceLine};
       return e.item
         ? {name:esc(e.item),sub:`${esc(e.restaurant||'')} · ${priceLine}`}
         : {name:esc(e.restaurant||'(unknown)'),sub:`Price updated · ${priceLine}`};
@@ -2276,7 +2356,12 @@ function changesRowLine(e){
   }
 }
 
-function renderGroupedEvents(events,groupMode){
+// opts.hideRestaurant: see changesRowLine. opts.expanded: render groups
+// already open (used for a single-restaurant category, usually a
+// handful of rows -- no reason to make that an extra tap) instead of
+// collapsed (used for "all restaurants" category views, which can be
+// long).
+function renderGroupedEvents(events,groupMode,opts={}){
   if(!events.length) return '<div class="changes-empty">No changes in this range.</div>';
   const groups=new Map();
   for(const e of events){
@@ -2288,8 +2373,11 @@ function renderGroupedEvents(events,groupMode){
   return sortedKeys.map(key=>{
     const hd=groupMode==='day'?formatDateLabel(key):`Week of ${formatDateLabel(key)}`;
     const rows=groups.get(key).map(e=>{
-      const {name,sub}=changesRowLine(e);
-      const clickable=!!e.restaurant_id;
+      const {name,sub}=changesRowLine(e,opts);
+      // Only a restaurant that OPENED is worth tapping through to -- a
+      // closed one has nothing useful to show, even if its restaurant_id
+      // happened to resolve.
+      const clickable=!!e.restaurant_id && e.category!=='restaurant_closed';
       return `<div class="list-row"${clickable?` data-rid="${esc(e.restaurant_id)}" data-iname="${esc(e.item||'')}"`:' style="cursor:default"'}>
         <div class="list-row-left">
           <div class="list-row-name">${name}</div>
@@ -2299,35 +2387,197 @@ function renderGroupedEvents(events,groupMode){
       </div>`;
     }).join('');
     const count=groups.get(key).length;
-    return `<div class="changes-group-hd"><span class="changes-group-chevron">▸</span>${esc(hd)} <span class="changes-group-count">(${count})</span></div><div class="list-card" style="display:none">${rows}</div>`;
+    const expanded=!!opts.expanded;
+    return `<div class="changes-group-hd${expanded?' expanded':''}"><span class="changes-group-chevron">▸</span>${esc(hd)} <span class="changes-group-count">(${count})</span></div><div class="list-card" style="display:${expanded?'block':'none'}">${rows}</div>`;
   }).join('');
 }
 
-function renderChangesResults(events,groupMode){
-  const sections=[
-    {title:'Restaurants',cats:['restaurant_added','restaurant_closed']},
-    {title:'Menu Changes',cats:['menu_item_added','menu_item_removed']},
-    {title:'Price Changes',cats:['price_change']},
-  ];
-  const html=sections.map(s=>{
-    const items=events.filter(e=>s.cats.includes(e.category));
-    return `<div class="changes-category">
+function groupEventsByRestaurant(events){
+  const map=new Map();
+  for(const e of events){
+    const key=e.restaurant_id||('name:'+(e.restaurant||''));
+    if(!map.has(key)) map.set(key,{restaurantId:e.restaurant_id||null,restaurantName:e.restaurant||'(unknown)',events:[],lastDate:''});
+    const g=map.get(key);
+    g.events.push(e);
+    if(e.date>g.lastDate) g.lastDate=e.date;
+  }
+  return [...map.values()].sort((a,b)=>b.lastDate.localeCompare(a.lastDate));
+}
+function restaurantSummaryLine(events){
+  const menu=events.filter(e=>e.category==='menu_item_added'||e.category==='menu_item_removed').length;
+  const price=events.filter(e=>e.category==='price_change').length;
+  const parts=[];
+  if(menu) parts.push(`${menu} menu change${menu===1?'':'s'}`);
+  if(price) parts.push(`${price} price change${price===1?'':'s'}`);
+  return parts.join(' · ');
+}
+function categoryBreakdown(events){
+  const menu=events.filter(e=>e.category==='menu_item_added'||e.category==='menu_item_removed');
+  const price=events.filter(e=>e.category==='price_change');
+  const out=[];
+  if(menu.length) out.push({key:'menu',label:'Menu Changes',icon:'🍽️',events:menu});
+  if(price.length) out.push({key:'price',label:'Price Changes',icon:'💲',events:price});
+  return out;
+}
+
+// ── Changes navigation stack ──
+function changesPushRestaurant(restaurantId,restaurantName,events){
+  changesStack.push({screen:'restaurant',restaurantId,restaurantName,events});
+  renderChangesFromStack();
+}
+function changesPushCategory(catKey,catLabel,events,opts){
+  changesStack.push({screen:'category',catKey,catLabel,events,backLabel:opts.backLabel,scopeRestaurant:!!opts.scopeRestaurant});
+  renderChangesFromStack();
+}
+function changesGoBackLevel(){
+  changesStack.pop();
+  renderChangesFromStack();
+}
+function renderChangesFromStack(){
+  const top=changesStack[changesStack.length-1];
+  if(!top){
+    setNav('changes','');
+    renderChangesLevel0();
+  } else if(top.screen==='restaurant'){
+    setNav('changes','Changes');
+    renderChangesLevel1(top);
+  } else if(top.screen==='category'){
+    setNav('changes',top.backLabel||'Changes');
+    renderChangesLevel2(top);
+  }
+  showView('changes');
+}
+
+// ── Level 0: date-range results (openings/closures + restaurants with changes) ──
+function renderChangesLevel0(){
+  document.getElementById('changes-title-block').style.display='';
+  document.getElementById('changes-controls').style.display='';
+  const container=document.getElementById('changes-results');
+  const events=CHANGES_CURRENT_EVENTS;
+  const facilityEvents=events.filter(e=>e.category==='restaurant_added'||e.category==='restaurant_closed');
+  const changeEvents=events.filter(e=>e.category==='menu_item_added'||e.category==='menu_item_removed'||e.category==='price_change');
+  const menuCount=changeEvents.filter(e=>e.category==='menu_item_added'||e.category==='menu_item_removed').length;
+  const priceCount=changeEvents.filter(e=>e.category==='price_change').length;
+  const byRestaurant=groupEventsByRestaurant(changeEvents);
+
+  if(!facilityEvents.length && !byRestaurant.length){
+    container.innerHTML='<div class="changes-empty">No changes in this range.</div>';
+    requestAnimationFrame(layoutPlanes);
+    return;
+  }
+
+  let html='';
+  if(menuCount||priceCount){
+    html+='<div class="changes-showall-row">';
+    if(menuCount) html+=`<button class="changes-showall-btn" data-showall="menu">🍽️ All Menu Changes <span class="n">(${menuCount})</span></button>`;
+    if(priceCount) html+=`<button class="changes-showall-btn" data-showall="price">💲 All Price Changes <span class="n">(${priceCount})</span></button>`;
+    html+='</div>';
+  }
+  if(facilityEvents.length){
+    html+=`<div class="changes-category">
       <div class="changes-category-hd">
-        <div class="changes-category-title">${esc(s.title)}</div>
-        <div class="changes-category-count">${items.length}</div>
+        <div class="changes-category-title">Openings &amp; Closures</div>
+        <div class="changes-category-count">${facilityEvents.length}</div>
       </div>
-      ${renderGroupedEvents(items,groupMode)}
+      ${renderGroupedEvents(facilityEvents,CHANGES_CURRENT_GROUPMODE)}
     </div>`;
-  }).join('');
-  const resultsEl=document.getElementById('changes-results');
-  resultsEl.innerHTML=html;
-  resultsEl.querySelectorAll('.list-row[data-rid]').forEach(el=>{
+  }
+  if(byRestaurant.length){
+    const rows=byRestaurant.map(r=>`
+      <div class="list-row changes-restaurant-row" data-restaurant-key="${esc(r.restaurantId||r.restaurantName)}">
+        <div class="list-row-left">
+          <div class="list-row-name"><span class="list-row-name-text">${esc(r.restaurantName)}</span><span class="list-row-arrow">›</span></div>
+          <div class="list-row-sub">${esc(restaurantSummaryLine(r.events))}</div>
+        </div>
+        <div class="list-row-right"><span class="changes-row-date">${formatDateLabel(r.lastDate)}</span></div>
+      </div>`).join('');
+    html+=`<div class="changes-category">
+      <div class="changes-category-hd">
+        <div class="changes-category-title">Restaurant Updates</div>
+        <div class="changes-category-count">${byRestaurant.length}</div>
+      </div>
+      <div class="list-card">${rows}</div>
+    </div>`;
+  }
+  container.innerHTML=html;
+
+  container.querySelectorAll('.changes-showall-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const key=btn.dataset.showall;
+      const evs=changeEvents.filter(e=>key==='menu'
+        ? (e.category==='menu_item_added'||e.category==='menu_item_removed')
+        : e.category==='price_change');
+      changesPushCategory(key,key==='menu'?'Menu Changes':'Price Changes',evs,{backLabel:'Changes',scopeRestaurant:false});
+    });
+  });
+  container.querySelectorAll('.changes-restaurant-row').forEach(el=>{
     el.addEventListener('click',()=>{
+      const key=el.dataset.restaurantKey;
+      const r=byRestaurant.find(x=>(x.restaurantId||x.restaurantName)===key);
+      if(r) changesPushRestaurant(r.restaurantId,r.restaurantName,r.events);
+    });
+  });
+  wireChangesRowClicks(container);
+  wireChangesGroupToggles(container);
+  requestAnimationFrame(layoutPlanes);
+}
+
+// ── Level 1: one restaurant's category breakdown ──
+function renderChangesLevel1(entry){
+  document.getElementById('changes-title-block').style.display='none';
+  document.getElementById('changes-controls').style.display='none';
+  const container=document.getElementById('changes-results');
+  const cats=categoryBreakdown(entry.events);
+  const tilesHtml=cats.map(c=>`
+    <div class="changes-cat-tile" data-cat="${esc(c.key)}">
+      <div class="changes-cat-tile-icon">${c.icon}</div>
+      <div class="changes-cat-tile-label">${esc(c.label)}</div>
+      <div class="changes-cat-tile-count">${c.events.length} change${c.events.length===1?'':'s'}</div>
+      <div class="changes-cat-tile-arrow">›</div>
+    </div>`).join('');
+  container.innerHTML=`
+    <div class="changes-level-header">
+      <div class="changes-level-title">${esc(entry.restaurantName)}</div>
+      <div class="changes-level-sub">Changes in this range</div>
+    </div>
+    <div class="changes-cat-tiles${cats.length<2?' single':''}">${tilesHtml}</div>`;
+  container.querySelectorAll('.changes-cat-tile').forEach(el=>{
+    el.addEventListener('click',()=>{
+      const c=cats.find(x=>x.key===el.dataset.cat);
+      if(c) changesPushCategory(c.key,c.label,c.events,{backLabel:entry.restaurantName,scopeRestaurant:true});
+    });
+  });
+  requestAnimationFrame(layoutPlanes);
+}
+
+// ── Level 2: one category's actual events, scoped to a restaurant or "all" ──
+function renderChangesLevel2(entry){
+  document.getElementById('changes-title-block').style.display='none';
+  document.getElementById('changes-controls').style.display='none';
+  const container=document.getElementById('changes-results');
+  const subPrefix=entry.scopeRestaurant?'':'All restaurants · ';
+  container.innerHTML=`
+    <div class="changes-level-header">
+      <div class="changes-level-title">${esc(entry.catLabel)}</div>
+      <div class="changes-level-sub">${subPrefix}${entry.events.length} change${entry.events.length===1?'':'s'} in this range</div>
+    </div>
+    ${renderGroupedEvents(entry.events,CHANGES_CURRENT_GROUPMODE,{hideRestaurant:entry.scopeRestaurant,expanded:entry.scopeRestaurant})}`;
+  wireChangesRowClicks(container);
+  wireChangesGroupToggles(container);
+  requestAnimationFrame(layoutPlanes);
+}
+
+function wireChangesRowClicks(container){
+  container.querySelectorAll('.list-row[data-rid]').forEach(el=>{
+    el.addEventListener('click',()=>{
+      cameToMenuFromChanges=true;
       browseStack=[];
       showMenu(el.dataset.rid, el.dataset.iname||null, null);
     });
   });
-  resultsEl.querySelectorAll('.changes-group-hd').forEach(hd=>{
+}
+function wireChangesGroupToggles(container){
+  container.querySelectorAll('.changes-group-hd').forEach(hd=>{
     hd.addEventListener('click',()=>{
       const card=hd.nextElementSibling;
       const collapsed=card.style.display==='none';
@@ -2336,7 +2586,6 @@ function renderChangesResults(events,groupMode){
       requestAnimationFrame(layoutPlanes);
     });
   });
-  requestAnimationFrame(layoutPlanes);
 }
 
 // ── MAPS CARD ──────────────────────────────────────────
