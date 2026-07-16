@@ -138,6 +138,7 @@ html, body {
 .home-card-label { font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.2; }
 .home-card-sub { font-size: 11px; color: var(--muted); line-height: 1.3; margin-top: auto; }
 .home-card-arrow { position: absolute; bottom: 14px; right: 14px; color: var(--dim); font-size: 16px; }
+.data-freshness { text-align: center; font-size: 11px; color: var(--dim); padding: 4px 16px 16px; cursor: pointer; }
 
 #view-browse { display: none; transition: transform 0.22s ease, opacity 0.22s ease; }
 #view-browse.active { display: block; }
@@ -467,6 +468,7 @@ html, body {
     <div class="home-greeting">Disney Dining Field Guide</div>
     <div class="home-sub">Search above, or pick a starting point.</div>
     <div class="home-cards" id="home-cards"></div>
+    <div class="data-freshness" id="data-freshness"></div>
   </div>
 
   <div id="view-browse">
@@ -566,7 +568,7 @@ html, body {
 'use strict';
 
 // ── STATE ──────────────────────────────────────────────
-const APP_VERSION = 'v20'; // bump this ONE place — loading screen and header tag both read from it
+const APP_VERSION = 'v22'; // bump this ONE place — loading screen and header tag both read from it
 // RESTAURANTS/REST_MAP: full records, ~1.5MB for 436 rows — cheap, stay in memory.
 // SEARCH_INDEX: slim per-item projection (12 of 29 fields) used ONLY for search
 // matching/rendering and the festival/price-change special views. Full item
@@ -575,6 +577,7 @@ const APP_VERSION = 'v20'; // bump this ONE place — loading screen and header 
 // avoids parsing/holding the full ~36MB menu dataset on every load.
 let RESTAURANTS = [], SEARCH_INDEX = [], REST_MAP = {};
 let FEST_COUNT = 0;
+let DATA_GENERATED_AT = null;   // manifest's own "generated" timestamp — surfaced as the "Fresh Baked" footer so staleness is visible, not silent
 // { [restaurant_id]: { [date]: {periods:[...], open, close, closed_flag?, refurbishment_flag?} } },
 // or {} if no hours data was available (older manifest, or fetch never ran).
 let HOURS_DATA = {};
@@ -991,20 +994,22 @@ function idbReplaceAll(db,store,records){
   });
 }
 
-// Loads RESTAURANTS/SEARCH_INDEX/FEST_COUNT/PRICE_CHANGE_COUNT from the meta
+// Loads RESTAURANTS/SEARCH_INDEX/FEST_COUNT/DATA_GENERATED_AT from the meta
 // store — used whenever the check is skipped or the manifest is unchanged.
 async function loadFromCache(db){
-  const [restMeta, searchMeta, statsMeta, hoursMeta] = await Promise.all([
+  const [restMeta, searchMeta, statsMeta, hoursMeta, genMeta] = await Promise.all([
     idbGet(db, IDB_STORE_META, 'restaurants'),
     idbGet(db, IDB_STORE_META, 'search_index'),
     idbGet(db, IDB_STORE_META, 'stats'),
     idbGet(db, IDB_STORE_META, 'hours'),
+    idbGet(db, IDB_STORE_META, 'generated_at'),
   ]);
   RESTAURANTS = restMeta?.value || [];
   SEARCH_INDEX = searchMeta?.value || [];
   REST_MAP = Object.fromEntries(RESTAURANTS.map(r=>[r.restaurant_id,r]));
   FEST_COUNT = statsMeta?.value?.festCount || 0;
   HOURS_DATA = hoursMeta?.value?.restaurants || {};
+  DATA_GENERATED_AT = genMeta?.value || null;
 }
 
 async function importFreshData(db, manifest){
@@ -1025,6 +1030,7 @@ async function importFreshData(db, manifest){
   SEARCH_INDEX = mData.map(toSearchIndexEntry);
   FEST_COUNT = mData.filter(m=>m.is_festival_item&&m.show_in_menu).length;
   HOURS_DATA = hData?.restaurants || {};
+  DATA_GENERATED_AT = manifest.generated || null;
 
   await idbReplaceAll(db, IDB_STORE_ITEMS, mData);
   await Promise.all([
@@ -1032,6 +1038,7 @@ async function importFreshData(db, manifest){
     idbPut(db, IDB_STORE_META, {key:'search_index', value:SEARCH_INDEX}),
     idbPut(db, IDB_STORE_META, {key:'stats', value:{festCount:FEST_COUNT}}),
     idbPut(db, IDB_STORE_META, {key:'hours', value:hData}),
+    idbPut(db, IDB_STORE_META, {key:'generated_at', value:DATA_GENERATED_AT}),
     idbPut(db, IDB_STORE_META, {key:'manifest', value:manifest}),
     idbPut(db, IDB_STORE_META, {key:'last_checked', value: Date.now()}),
   ]);
@@ -1172,6 +1179,7 @@ function goBackOneLevel(){
 function setupNavigation(){
   document.getElementById('home-btn').addEventListener('click',goHome);
   document.getElementById('breadcrumb-label').addEventListener('click',goBackOneLevel);
+  document.getElementById('data-freshness').addEventListener('click',forceRefreshData);
 }
 
 // ── SWIPE-BACK (Browse only) ──────────────────────────
@@ -1290,6 +1298,53 @@ function buildHomeCards(){
   container.querySelectorAll('.home-card').forEach(el=>{
     el.addEventListener('click',()=>{const c=cards[+el.dataset.idx];if(!c.disabled)c.action();});
   });
+  renderDataFreshness();
+}
+
+function renderDataFreshness(){
+  const el=document.getElementById('data-freshness');
+  const d=DATA_GENERATED_AT?new Date(DATA_GENERATED_AT):null;
+  if(!d||isNaN(d)){ el.textContent='Tap to check for updates ↻'; return; }
+  const label=d.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'});
+  el.textContent=`Fresh Baked: ${label} ↻`;
+}
+
+// Manual bypass of DATA_CHECK_INTERVAL_MS's 24h gate — the gate lives in
+// IndexedDB (checkAndLoadData's dueForCheck), which clearing Safari's
+// History/cache does NOT reset, so a "just cleared everything" user can
+// still get served yesterday's data with no way to force a real check.
+// This is that way.
+let refreshInFlight=false;
+async function forceRefreshData(){
+  if(refreshInFlight) return;
+  refreshInFlight=true;
+  const el=document.getElementById('data-freshness');
+  el.textContent='Checking for updates…';
+  let resultMsg;
+  try {
+    const db=await openMenuDB();
+    const manifestRow=await idbGet(db, IDB_STORE_META, 'manifest');
+    const haveCache=!!manifestRow;
+    const manifest=await fetch('data/data_manifest.json',{cache:'no-store'}).then(r=>r.json());
+    const unchanged=haveCache &&
+      manifestRow.value.restaurant_data===manifest.restaurant_data &&
+      manifestRow.value.menu_data===manifest.menu_data &&
+      manifestRow.value.hours_data===manifest.hours_data;
+
+    if(unchanged){
+      await idbPut(db, IDB_STORE_META, {key:'last_checked', value: Date.now()});
+      resultMsg='Already up to date';
+    } else {
+      await importFreshData(db, manifest);
+      resultMsg='Updated!';
+    }
+  } catch(e){
+    console.error(e);
+    resultMsg='Refresh failed — check connection';
+  }
+  el.textContent=resultMsg;
+  refreshInFlight=false;
+  setTimeout(buildHomeCards,1500);
 }
 
 // ── BROWSE ─────────────────────────────────────────────
