@@ -6,7 +6,7 @@
 // Cache name is tied to APP_VERSION (index.html) so bumping that version and
 // redeploying rolls the shell forward: activate deletes any cache whose name
 // doesn't match the current version.
-const CACHE_VERSION = 'v22';
+const CACHE_VERSION = 'v23';
 const CACHE_NAME = `wienie-shell-${CACHE_VERSION}`;
 const SHELL_FILES = [
   './',

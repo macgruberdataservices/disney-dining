@@ -124,7 +124,7 @@ html, body {
    pins sticky children of a padded scroller at (scroller padding + top)
    instead of just (top) — doubling the offset. Keeping #main padding-free
    makes --menu-sticky-top mean what it says. */
-#view-home, #view-browse, #view-menu, #view-changes { padding-top: var(--plane-clearance, 0px); }
+#view-home, #view-browse, #view-menu, #view-changes, #view-ellis { padding-top: var(--plane-clearance, 0px); }
 #view-home { display: none; }
 #view-home.active { display: block; }
 .home-greeting { padding: 20px 16px 4px; font-family: var(--serif); font-style: italic; font-size: 22px; color: var(--ink); letter-spacing: -0.01em; text-align: center; }
@@ -454,6 +454,31 @@ html, body {
 @keyframes dot-pulse { 0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1); } }
 
 .scroll-anchor { scroll-margin-top: 160px; }
+
+#view-ellis { display: none; }
+#view-ellis.active { display: block; }
+.ellis-panel { padding: 4px 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+.ellis-input-row { display: flex; gap: 8px; }
+#ellis-input {
+  flex: 1; height: 44px; padding: 0 14px;
+  background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--r-md);
+  color: var(--ink); font-family: var(--sans); font-size: 15px; outline: none;
+}
+#ellis-input:focus { border-color: var(--pine); }
+#ellis-ask-btn {
+  padding: 0 18px; border-radius: var(--r-md); border: none; background: var(--pine);
+  color: #fff; font-family: var(--sans); font-weight: 600; font-size: 14px; cursor: pointer;
+}
+#ellis-ask-btn:disabled { opacity: 0.5; cursor: default; }
+.ellis-output {
+  min-height: 60px; padding: 14px 16px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--r-lg);
+  color: var(--ink); font-size: 14px; line-height: 1.5; white-space: pre-wrap;
+}
+.ellis-output:empty { display: none; }
+.ellis-output.loading { color: var(--muted); font-style: italic; }
+.ellis-output.error { color: var(--gold); border-color: var(--gold); }
+.ellis-hint { font-size: 11px; color: var(--dim); padding: 0 2px; }
 </style>
 </head>
 <body data-theme="parkguide">
@@ -543,6 +568,22 @@ html, body {
     </div>
     <div id="changes-results"></div>
   </div>
+
+  <div id="view-ellis">
+    <div class="list-section-hd">
+      <div class="list-section-title">Ask ELLIS</div>
+      <div class="list-section-sub">Ask a dining question in plain English</div>
+    </div>
+    <div class="ellis-panel">
+      <div class="ellis-input-row">
+        <input id="ellis-input" type="text" placeholder="e.g. Which restaurants are closest to Magic Kingdom tomorrow?"
+               autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button id="ellis-ask-btn">Ask</button>
+      </div>
+      <div class="ellis-hint">Experimental — answers may be incomplete or wrong.</div>
+      <div id="ellis-output" class="ellis-output"></div>
+    </div>
+  </div>
 </div>
 
 <div id="results-plane">
@@ -595,11 +636,12 @@ html, body {
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 'use strict';
 
 // ── STATE ──────────────────────────────────────────────
-const APP_VERSION = 'v22'; // bump this ONE place — loading screen and header tag both read from it
+const APP_VERSION = 'v23'; // bump this ONE place — loading screen and header tag both read from it
 // RESTAURANTS/REST_MAP: full records, ~1.5MB for 436 rows — cheap, stay in memory.
 // SEARCH_INDEX: slim per-item projection (12 of 29 fields) used ONLY for search
 // matching/rendering and the festival/price-change special views. Full item
@@ -1126,6 +1168,7 @@ function init(){
   setupAllergyTooltip();
   setupNavigation();
   setupSwipeBack();
+  setupEllisUI();
   document.getElementById('results-plane').classList.remove('visible');
   document.getElementById('filter-plane').classList.remove('visible');
   searchSessionState = 'closed';
@@ -1298,7 +1341,7 @@ function setNav(view,breadLabel){
   else{sep.style.display=breadLabel?'inline':'none';lbl.style.display=breadLabel?'inline':'none';lbl.textContent=breadLabel||'';}
 }
 function showView(name){
-  ['home','browse','menu','changes'].forEach(v=>document.getElementById('view-'+v).classList.remove('active'));
+  ['home','browse','menu','changes','ellis'].forEach(v=>document.getElementById('view-'+v).classList.remove('active'));
   if(name!=='search'){
     const el=document.getElementById('view-'+name);
     if(el){
@@ -1334,6 +1377,7 @@ function buildHomeCards(){
     festCount>0?{icon:'🎪',label:'Festival',sub:`${festCount} special items`,action:()=>showFestivalItems(),festival:true}:null,
     {icon:'🔄',label:'See Changes',sub:'Menu updates, prices, openings & closures',
      action:()=>showChangesHome()},
+    {icon:'💬',label:'Ask ELLIS',sub:'Ask a dining question',action:()=>showEllisHome()},
   ].filter(Boolean);
 
   const container=document.getElementById('home-cards');
@@ -2234,6 +2278,10 @@ let cameToMenuFromChanges = false;
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function daysAgoStr(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
 
+function showEllisHome(){
+  setNav('ellis','');showView('ellis');
+}
+
 function showChangesHome(){
   setupChangesControls();
   changesStack=[];
@@ -2608,6 +2656,96 @@ function showMapsCard(r){
 function hideMapsCard(){
   document.getElementById('maps-overlay-bg').classList.remove('visible');
   document.getElementById('maps-card').classList.remove('visible');
+}
+
+// ── ELLIS INTEGRATION ──────────────────────────────────
+// External Q&A backend run by a separate project (ELLIS). Read-only in v1:
+// answers questions, no reservations/writes. Only a Supabase publishable/anon
+// key lives here — that key type is meant to be public; auth + rate limiting
+// happen host-side. See ellis-external-api-disney-dining-handoff.md.
+const SUPABASE_URL = 'https://hbxhmzwnpygmjdaqrbqx.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_7CtDTWsZliht4t-I1e1J6w_Y3_InxsA';
+const ELLIS_HOST = 'disney-dining';
+const ELLIS_CONFIGURED = SUPABASE_ANON_KEY !== 'REPLACE_WITH_SUPABASE_PUBLISHABLE_ANON_KEY';
+
+const ellisSupabase = ELLIS_CONFIGURED
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+async function ensureEllisSession(){
+  let { data: { session } } = await ellisSupabase.auth.getSession();
+  if(!session){
+    const result = await ellisSupabase.auth.signInAnonymously();
+    if(result.error) throw result.error;
+    session = result.data.session;
+  }
+  return session;
+}
+
+async function askEllis(query, options = {}){
+  const session = await ensureEllisSession();
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/ellis-api`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+      'x-ellis-host': ELLIS_HOST
+    },
+    body: JSON.stringify({
+      query,
+      location: options.location || 'Walt Disney World, Florida',
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      history: options.history || []
+    })
+  });
+  const payload = await response.json();
+  if(!response.ok || payload.ok === false){
+    const error = new Error(payload.error?.message || 'ELLIS request failed');
+    error.code = payload.error?.code;
+    error.requestId = payload.request_id;
+    throw error;
+  }
+  return payload;
+}
+
+function setupEllisUI(){
+  const input = document.getElementById('ellis-input');
+  const btn = document.getElementById('ellis-ask-btn');
+  const output = document.getElementById('ellis-output');
+
+  if(!ELLIS_CONFIGURED){
+    btn.disabled = true;
+    input.placeholder = 'Ask ELLIS is not configured yet';
+    return;
+  }
+
+  async function submit(){
+    const query = input.value.trim();
+    if(!query || btn.disabled) return;
+    btn.disabled = true;
+    output.classList.remove('error');
+    output.classList.add('loading');
+    output.textContent = 'Thinking…';
+    try{
+      const answer = await askEllis(query);
+      output.classList.remove('loading');
+      output.textContent = answer.text;
+    }catch(error){
+      output.classList.remove('loading');
+      output.classList.add('error');
+      output.textContent = 'ELLIS is temporarily unavailable. Please try again.';
+      console.error('ELLIS request failed', {
+        code: error.code,
+        requestId: error.requestId,
+        message: error.message
+      });
+    }finally{
+      btn.disabled = false;
+    }
+  }
+
+  btn.addEventListener('click', submit);
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter') submit(); });
 }
 
 // ── BOOT ───────────────────────────────────────────────
