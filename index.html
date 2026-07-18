@@ -617,8 +617,7 @@ html, body {
 </div>
 
 <div id="af-tooltip">
-  An allergy-friendly version of this item may be available. Ask a Cast Member when ordering, or check the
-  <a href="https://disneyworld.disney.go.com/guest-services/special-dietary-requests/" target="_blank" rel="noopener">Disney allergy info page</a> for details.
+  <div id="af-tooltip-body"></div>
   <button id="af-tooltip-close">Got it</button>
 </div>
 
@@ -716,9 +715,20 @@ const PRICE_FILTERS = [
   {key:'3',label:'$$$ $35–$59'},{key:'4',label:'$$$$ $60+'},
 ];
 // 'alcoholic' removed — redundant with Beer/Wine/Cocktails food-type filters.
+// The 9 allergen keys below match ALLERGEN_LABELS/ALLERGEN_LABEL_MAP
+// (normalize_menu.py) exactly — each one filters to items where Disney has
+// published an allergy-friendly menu section naming that specific allergen.
+// Never merge these into a combined chip; see the safety note on
+// ALLERGEN_LABEL_MAP for why.
 const DIETARY_FILTERS = [
   {key:'kids',label:'Kids menu'},{key:'allergy-friendly',label:'Allergy-friendly'},
+  {key:'gluten-wheat',label:'Gluten/Wheat-friendly'},{key:'milk',label:'Milk-friendly'},
+  {key:'egg',label:'Egg-friendly'},{key:'soy',label:'Soy-friendly'},
+  {key:'sesame',label:'Sesame-friendly'},{key:'peanut',label:'Peanut-friendly'},
+  {key:'tree-nut',label:'Tree Nut-friendly'},{key:'fish',label:'Fish-friendly'},
+  {key:'shellfish',label:'Shellfish-friendly'},
 ];
+const ALLERGEN_FILTER_KEYS = ['gluten-wheat','milk','egg','soy','sesame','peanut','tree-nut','fish','shellfish'];
 
 // ── UTILS ──────────────────────────────────────────────
 const esc = s => s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1011,6 +1021,7 @@ function toSearchIndexEntry(item){
     is_kids: item.is_kids,
     is_allergy_friendly: item.is_allergy_friendly,
     has_allergy_option: item.has_allergy_option,
+    allergy_free_of: item.allergy_free_of,
   };
 }
 
@@ -1684,7 +1695,7 @@ async function showMenu(restaurantId,scrollToItem,period){
       if(showSub) gHtml+=`<div class="menu-cat-hd">${esc(cat)}</div>`;
       for(const item of catItems.sort((a,b)=>(a.item||'').localeCompare(b.item||''))){
         const isHL=scrollToItem&&item.item?.toLowerCase()===scrollToItem.toLowerCase();
-        const afBadge=item.has_allergy_option?`<button class="af-badge js-af-badge" aria-label="Allergy options available">A</button>`:'';
+        const afBadge=item.has_allergy_option?`<button class="af-badge js-af-badge" data-af="${esc((item.allergy_free_of||[]).join(','))}" aria-label="Allergy options available">A</button>`:'';
         const festTag=item.is_festival_item?`<span class="festival-tag">Festival</span>`:'';
         const prevPrice=item.price_changed&&item.previous_price?`<span class="menu-item-changed">$${item.previous_price.toFixed(2)}</span>`:'';
         gHtml+=`<div id="${isHL?'hl-item':''}" class="menu-item${isHL?' highlighted scroll-anchor':''}">
@@ -1706,7 +1717,7 @@ async function showMenu(restaurantId,scrollToItem,period){
   document.getElementById('menu-content').innerHTML=html;
 
   document.querySelectorAll('.js-af-badge').forEach(btn=>{
-    btn.addEventListener('click',e=>{e.stopPropagation();showAfTooltip(btn);});
+    btn.addEventListener('click',e=>{e.stopPropagation();showAfTooltip(btn,(btn.dataset.af||'').split(',').filter(Boolean));});
   });
 
   const backLabel=cameToMenuFromChanges?'Changes':(browseStack.length>0?(browseStack[browseStack.length-1]?.label||'Back'):'Search');
@@ -1874,6 +1885,13 @@ function renderResults(q){
     if(filters.food.size&&!i.norm_categories?.some(c=>filters.food.has(c)))return false;
     if(filters.meal.size&&!filters.meal.has(i.dining_period))return false;
     if(filters.dietary.has('kids')&&!i.is_kids)return false;
+    // Each active allergen chip must be present in the item's own
+    // allergy_free_of — never satisfied by is_allergy_friendly/has_allergy_option
+    // alone, since those don't say WHICH allergen. AND semantics across
+    // multiple selected allergens, same as every other filter group here.
+    for(const a of ALLERGEN_FILTER_KEYS){
+      if(filters.dietary.has(a)&&!i.allergy_free_of?.includes(a))return false;
+    }
     // 'alcoholic' dietary filter removed — Beer/Wine/Cocktails food-type
     // chips already cover this, no need for a separate redundant toggle.
     return true;
@@ -2016,7 +2034,7 @@ function renderResults(q){
     el.addEventListener('click',()=>{cameToMenuFromChanges=false;browseStack=[];currentRestId=el.dataset.rid;tuckSearchSession();showMenu(el.dataset.rid,el.dataset.iname,null);});
   });
   listEl.querySelectorAll('.js-af-badge-result').forEach(btn=>{
-    btn.addEventListener('click',e=>{e.stopPropagation();showAfTooltip(btn);});
+    btn.addEventListener('click',e=>{e.stopPropagation();showAfTooltip(btn,(btn.dataset.af||'').split(',').filter(Boolean));});
   });
 
   requestAnimationFrame(layoutPlanes);
@@ -2025,7 +2043,7 @@ function renderResults(q){
 function renderItemRow(item,q){
   const r=REST_MAP[item.restaurant_id];
   const d=proximityActive&&userLat&&r?.lat?fmtDist(dist(userLat,userLng,r.lat,r.lng)):'';
-  const af=item.has_allergy_option?`<span class="af-badge js-af-badge-result" title="Allergy-friendly option available">A</span>`:'';
+  const af=item.has_allergy_option?`<span class="af-badge js-af-badge-result" data-af="${esc((item.allergy_free_of||[]).join(','))}" title="Allergy-friendly option available">A</span>`:'';
   return `<div class="result-item" data-rid="${esc(item.restaurant_id)}" data-iname="${esc(item.item)}">
     <div class="result-item-name">${highlightMatch(item.item,q)}</div>
     <div class="result-item-rest">${esc(r?.restaurant||'')}</div>
@@ -2161,11 +2179,30 @@ function setupFilterSwipe(){
 }
 
 // ── ALLERGY TOOLTIP ────────────────────────────────────
+// allergy_free_of holds Disney's own published section names (e.g.
+// "gluten-wheat"), not a claim WE are making — the copy below has to keep
+// deferring to Disney/the server, never assert an item "is" free of
+// something. See normalize_menu.py's ALLERGEN_LABEL_MAP comment for why
+// these must stay exactly as narrow as Disney's own labels, never merged.
+const ALLERGEN_LABELS = {
+  'gluten-wheat':'Gluten/Wheat', 'milk':'Milk', 'egg':'Egg', 'soy':'Soy',
+  'sesame':'Sesame', 'peanut':'Peanut', 'tree-nut':'Tree Nut',
+  'fish':'Fish', 'shellfish':'Shellfish',
+};
+const DISNEY_ALLERGY_LINK = '<a href="https://disneyworld.disney.go.com/guest-services/special-dietary-requests/" target="_blank" rel="noopener">Disney allergy info page</a>';
+function afTooltipBody(allergyFreeOf){
+  if(allergyFreeOf && allergyFreeOf.length){
+    const names = allergyFreeOf.map(t=>ALLERGEN_LABELS[t]||t).join(', ');
+    return `Disney publishes an allergy-friendly version of this item for: <strong>${esc(names)}</strong>. This reflects Disney's own menu, not a guarantee — confirm with your server before ordering. See the ${DISNEY_ALLERGY_LINK} for details.`;
+  }
+  return `An allergy-friendly version of this item may be available. Ask a Cast Member when ordering, or check the ${DISNEY_ALLERGY_LINK} for details.`;
+}
 function setupAllergyTooltip(){
   document.getElementById('af-tooltip-close').addEventListener('click',hideAfTooltip);
 }
-function showAfTooltip(anchor){
+function showAfTooltip(anchor,allergyFreeOf){
   const tip=document.getElementById('af-tooltip');
+  document.getElementById('af-tooltip-body').innerHTML=afTooltipBody(allergyFreeOf);
   tip.style.display='block';
   const rect=anchor.getBoundingClientRect();
   const tipH=190,tipW=260;
