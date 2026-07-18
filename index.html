@@ -479,6 +479,13 @@ html, body {
 .ellis-output.loading { color: var(--muted); font-style: italic; }
 .ellis-output.error { color: var(--gold); border-color: var(--gold); }
 .ellis-hint { font-size: 11px; color: var(--dim); padding: 0 2px; }
+/* Venue cards reuse .list-card/.list-row as-is (same markup as the Browse
+   restaurant list) so they're pixel-identical in size/type to every other
+   restaurant row in the app — this wrapper only cancels ellis-output's own
+   padding so .list-row's normal margins read the same as they do in
+   #browse-list, which has no padding of its own. */
+.ellis-venue-cards { margin: 12px -16px -14px; }
+.ellis-venue-hd { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0 16px 2px; }
 </style>
 </head>
 <body data-theme="parkguide">
@@ -640,7 +647,7 @@ html, body {
 'use strict';
 
 // ── STATE ──────────────────────────────────────────────
-const APP_VERSION = 'v23'; // bump this ONE place — loading screen and header tag both read from it
+const APP_VERSION = 'v24'; // bump this ONE place — loading screen and header tag both read from it
 // RESTAURANTS/REST_MAP: full records, ~1.5MB for 436 rows — cheap, stay in memory.
 // SEARCH_INDEX: slim per-item projection (12 of 29 fields) used ONLY for search
 // matching/rendering and the festival/price-change special views. Full item
@@ -1250,6 +1257,13 @@ function goBackOneLevel(){
       renderChangesFromStack();
       return;
     }
+    if(cameToMenuFromEllis){
+      // The ellis view/output stays in the DOM untouched while hidden, so
+      // returning to it needs no re-render — unlike Changes above.
+      cameToMenuFromEllis=false;
+      showEllisHome();
+      return;
+    }
     // Returning from a menu page: go back to exactly the restaurant list
     // we came from. browseStack still holds [park, area] (or
     // [resort-root, resort]) from when we drilled into the restaurant —
@@ -1720,7 +1734,7 @@ async function showMenu(restaurantId,scrollToItem,period){
     btn.addEventListener('click',e=>{e.stopPropagation();showAfTooltip(btn,(btn.dataset.af||'').split(',').filter(Boolean));});
   });
 
-  const backLabel=cameToMenuFromChanges?'Changes':(browseStack.length>0?(browseStack[browseStack.length-1]?.label||'Back'):'Search');
+  const backLabel=cameToMenuFromChanges?'Changes':(cameToMenuFromEllis?'Ask ELLIS':(browseStack.length>0?(browseStack[browseStack.length-1]?.label||'Back'):'Search'));
   setNav('menu',backLabel);showView('menu');
 
   if(scrollToItem){
@@ -2311,6 +2325,7 @@ let CHANGES_CURRENT_EVENTS = [];  // flat events for the currently-loaded range
 let CHANGES_CURRENT_GROUPMODE = 'week';   // 'day' | 'week' -- how far back the range spans
 let changesStack = [];   // [] = top-level results list; each push is one drill-down level
 let cameToMenuFromChanges = false;
+let cameToMenuFromEllis = false;
 
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function daysAgoStr(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
@@ -2745,6 +2760,70 @@ async function askEllis(query, options = {}){
   return payload;
 }
 
+// ELLIS's response has two independent parts that can disagree: `text` is
+// free-form prose (sometimes from general model knowledge, not our data),
+// while `blocks` (type:"venue") is built by ELLIS directly from this same
+// site's published data — confirmed by site_data.generated_at matching our
+// own data_manifest.json timestamp. Only the latter is safe to turn into a
+// tappable link back into the app, and only when the venue name resolves
+// to an exact restaurant we actually have — no match, no card, rather than
+// guessing and linking to the wrong place.
+function normalizeRestName(s){
+  return (s||'').toLowerCase().replace(/[®™''’&]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+}
+function findRestaurantIdByName(name){
+  const target = normalizeRestName(name);
+  if(!target) return null;
+  const hit = RESTAURANTS.find(r=>normalizeRestName(r.restaurant)===target);
+  return hit ? hit.restaurant_id : null;
+}
+// Real venue names get phrased differently in prose than in a title field —
+// e.g. block.title "The Front Porch at House of Blues" vs text saying
+// "House of Blues (Front Porch & Smokehouse)". A strict substring check
+// misses that. Instead: every significant word (3+ letters, minus basic
+// stopwords) in the title has to appear SOMEWHERE in the text — order
+// doesn't matter, but every word still has to genuinely be there. Titles
+// that reduce to zero significant words never match (safe default).
+const ELLIS_NAME_STOPWORDS = new Set(['the','a','an','at','in','of','and','for','to']);
+// Only ever render a card for a place ELLIS's own answer actually named —
+// block.title has to appear in the answer text itself, not just show up in
+// ELLIS's separate, looser site_data search. A venue block that's merely
+// "related" but never named is not the recommendation and showing it as
+// if it were is worse than showing nothing. Cards are ordered by where
+// each venue is first mentioned in the text, not blocks[]'s own order, so
+// e.g. a "my top pick" named first in the prose sorts first here too.
+function renderEllisBlocks(text, blocks){
+  const normText = normalizeRestName(text);
+  const matched = [];
+  for(const b of (blocks||[])){
+    if(b.type!=='venue') continue;
+    const words = normalizeRestName(b.title).split(' ').filter(w=>w.length>=3&&!ELLIS_NAME_STOPWORDS.has(w));
+    if(!words.length || !words.every(w=>normText.includes(w))) continue;
+    const rid = findRestaurantIdByName(b.title);
+    if(!rid) continue;
+    const firstIdx = Math.min(...words.map(w=>normText.indexOf(w)));
+    matched.push({rid, title:b.title, subtitle:b.subtitle, firstIdx});
+  }
+  if(!matched.length) return '';
+  matched.sort((a,b)=>a.firstIdx-b.firstIdx);
+  // Same .list-card/.list-row markup as showRestaurantList() — identical
+  // size/type to every other restaurant row in the app, price tier included.
+  const rows = matched.map(m=>{
+    const r = REST_MAP[m.rid];
+    return `<div class="list-row" data-rid="${esc(m.rid)}">
+      <div class="list-row-left">
+        <div class="list-row-name">${esc(m.title)}</div>
+        <div class="list-row-sub">${esc(m.subtitle||'')}</div>
+      </div>
+      <div class="list-row-right">
+        ${r?.price_tier?`<span class="list-row-price">${'$'.repeat(r.price_tier)}</span>`:''}
+        <span class="list-row-arrow">›</span>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="ellis-venue-cards"><div class="ellis-venue-hd">Open in Wienie</div><div class="list-card">${rows}</div></div>`;
+}
+
 function setupEllisUI(){
   const input = document.getElementById('ellis-input');
   const btn = document.getElementById('ellis-ask-btn');
@@ -2766,7 +2845,18 @@ function setupEllisUI(){
     try{
       const answer = await askEllis(query);
       output.classList.remove('loading');
-      output.textContent = answer.text;
+      const textHtml = `<div class="ellis-answer-text">${esc(answer.text).replace(/\n/g,'<br>')}</div>`;
+      output.innerHTML = textHtml + renderEllisBlocks(answer.text, answer.blocks);
+      output.querySelectorAll('.ellis-venue-cards .list-row[data-rid]').forEach(card=>{
+        card.addEventListener('click',()=>{
+          const rid = card.dataset.rid;
+          cameToMenuFromEllis = true;
+          cameToMenuFromChanges = false;
+          browseStack = [];
+          currentRestId = rid;
+          showMenu(rid, null, null);
+        });
+      });
     }catch(error){
       output.classList.remove('loading');
       output.classList.add('error');
