@@ -247,6 +247,7 @@ html, body {
 .menu-rest-name-row { display: flex; align-items: flex-start; gap: 8px; }
 .menu-rest-name { font-family: var(--serif); font-size: 17px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; line-height: 1.15; flex: 1; }
 .info-btn { background: var(--surface); border: 1.5px solid var(--border-md); border-radius: 50%; width: 23px; height: 23px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; margin-top: 0; color: var(--muted); font-size: 11px; font-weight: 700; font-family: var(--serif); font-style: italic; transition: all 0.12s; }
+.info-btn.saved { color: var(--gold); border-color: var(--gold); }
 .info-btn:active { background: var(--gold-lt); border-color: var(--gold); color: var(--forest); }
 .menu-rest-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
@@ -486,6 +487,18 @@ html, body {
    #browse-list, which has no padding of its own. */
 .ellis-venue-cards { margin: 12px -16px -14px; white-space: normal; }
 .ellis-venue-hd { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0 16px 2px; }
+.ellis-api-tag { font-size: 10px; font-weight: 600; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
+.ellis-item-list { margin-top: 4px; }
+.ellis-item-row { padding: 3px 0; border-top: 1px solid var(--border); }
+.ellis-item-row:first-child { border-top: none; }
+.ellis-item-name { font-size: 13px; color: var(--ink); }
+.ellis-item-desc { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.ellis-item-price { font-size: 12px; color: var(--muted); }
+/* Reuses .data-freshness's own look (line ~141) for visual consistency —
+   same role, different surface: that one is the whole-app data-freshness
+   footer, this is per-answer provenance for an ELLIS response. */
+.ellis-provenance { text-align: left; font-size: 11px; color: var(--dim); padding: 6px 16px 0; }
+.ellis-provenance.unverified { color: var(--gold); }
 </style>
 </head>
 <body data-theme="parkguide">
@@ -547,6 +560,8 @@ html, body {
       <div class="menu-rest-header">
         <div class="menu-rest-name-row">
           <div class="menu-rest-name" id="menu-rest-name"></div>
+          <button class="info-btn" id="menu-save-btn" aria-label="Save this restaurant">☆</button>
+          <button class="info-btn" id="menu-ask-ellis-btn" style="display:none" aria-label="Ask ELLIS about this restaurant">?</button>
           <button class="info-btn" id="menu-info-btn" style="display:none" aria-label="Location & info">i</button>
         </div>
         <div class="menu-rest-meta" id="menu-rest-meta"></div>
@@ -647,7 +662,7 @@ html, body {
 'use strict';
 
 // ── STATE ──────────────────────────────────────────────
-const APP_VERSION = 'v24'; // bump this ONE place — loading screen and header tag both read from it
+const APP_VERSION = 'v25'; // bump this ONE place — loading screen and header tag both read from it
 // RESTAURANTS/REST_MAP: full records, ~1.5MB for 436 rows — cheap, stay in memory.
 // SEARCH_INDEX: slim per-item projection (12 of 29 fields) used ONLY for search
 // matching/rendering and the festival/price-change special views. Full item
@@ -655,6 +670,7 @@ const APP_VERSION = 'v24'; // bump this ONE place — loading screen and header 
 // restaurant_id only when a specific menu is opened (showMenu) — this is what
 // avoids parsing/holding the full ~36MB menu dataset on every load.
 let RESTAURANTS = [], SEARCH_INDEX = [], REST_MAP = {};
+let PLACE_MAP = {};   // { [place_id]: restaurant } — rebuilt from RESTAURANTS after every load (fresh or cached)
 let FEST_COUNT = 0;
 let DATA_GENERATED_AT = null;   // manifest's own "generated" timestamp — surfaced as the "Fresh Baked" footer so staleness is visible, not silent
 // { [restaurant_id]: { [date]: {periods:[...], open, close, closed_flag?, refurbishment_flag?} } },
@@ -1002,8 +1018,21 @@ document.addEventListener('focusout', ()=>{ setTimeout(unshoveViewport, 60); });
 // are imported into IndexedDB once per data change; everyday loads read the
 // small SEARCH_INDEX/RESTAURANTS projection straight out of IDB metadata
 // with zero network calls and zero re-parsing of the full dataset.
-const IDB_NAME = 'wienie_dining', IDB_VERSION = 1;
-const IDB_STORE_ITEMS = 'menu_items', IDB_STORE_META = 'meta';
+const IDB_NAME = 'wienie_dining', IDB_VERSION = 2;
+const IDB_STORE_ITEMS = 'menu_items', IDB_STORE_META = 'meta', IDB_STORE_SAVED = 'saved';
+
+// ── Canonical identity (place:wdw:<restaurant_id> / offering:wdw:<item_id>) ──
+// Shared, opaque id joining Wienie's local data to ellis-api's blocks[]/
+// items[] responses and the wider platform — zero-data join, computed
+// client-side from ids Wienie already has. Verified live 2026-07-18
+// against production ellis-api: block.place_id for a real venue matches
+// this exact template against our own restaurant_id, item offering_id
+// matches our own item_id, byte-for-byte. Split on ':' only to read the
+// namespace segment — never infer anything else from an id's structure,
+// ours or one we receive.
+function placeId(restaurantId){ return restaurantId ? `place:wdw:${restaurantId}` : null; }
+function offeringId(itemId){ return itemId ? `offering:wdw:${itemId}` : null; }
+function parseNamespace(id){ return id ? (id.split(':')[1] || null) : null; }
 // iOS Safari has no Periodic Background Sync, so "once daily" has to be a
 // foreground check gated by a stored timestamp, not a true background job.
 const DATA_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -1048,6 +1077,11 @@ function openMenuDB(){
       if(!db.objectStoreNames.contains(IDB_STORE_META)){
         db.createObjectStore(IDB_STORE_META, {keyPath:'key'});
       }
+      // v2: local saves, keyed by canonical id (place:wdw:... / offering:
+      // wdw:...) — anonymous, offline, no backend. {id, type, saved_at}.
+      if(!db.objectStoreNames.contains(IDB_STORE_SAVED)){
+        db.createObjectStore(IDB_STORE_SAVED, {keyPath:'id'});
+      }
     };
     req.onsuccess = ()=>resolve(req.result);
     req.onerror = ()=>reject(req.error);
@@ -1084,6 +1118,48 @@ function idbReplaceAll(db,store,records){
     tx.onerror=()=>reject(tx.error);
   });
 }
+function idbGetAll(db,store){
+  return new Promise((resolve,reject)=>{
+    const req=db.transaction(store,'readonly').objectStore(store).getAll();
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+function idbDelete(db,store,key){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(store,'readwrite').objectStore(store).delete(key);
+    tx.onsuccess=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+
+// ── Milestone 5: local saves, keyed by canonical id ─────────────────────
+// Fully anonymous, fully offline — no backend, no account. SAVED_IDS is an
+// in-memory mirror of IDB_STORE_SAVED's keys so isSaved() can be checked
+// synchronously during render; every mutation writes through to IDB first.
+let SAVED_IDS = new Set();
+
+async function refreshSavedIds(){
+  const db = await openMenuDB();
+  const rows = await idbGetAll(db, IDB_STORE_SAVED);
+  SAVED_IDS = new Set(rows.map(r=>r.id));
+  buildHomeCards();
+}
+
+function isSaved(id){ return !!id && SAVED_IDS.has(id); }
+
+async function toggleSave(id, type){
+  if(!id) return;
+  const db = await openMenuDB();
+  if(SAVED_IDS.has(id)){
+    await idbDelete(db, IDB_STORE_SAVED, id);
+    SAVED_IDS.delete(id);
+  } else {
+    await idbPut(db, IDB_STORE_SAVED, {id, type, saved_at: Date.now()});
+    SAVED_IDS.add(id);
+  }
+  buildHomeCards();
+}
 
 // Loads RESTAURANTS/SEARCH_INDEX/FEST_COUNT/DATA_GENERATED_AT from the meta
 // store — used whenever the check is skipped or the manifest is unchanged.
@@ -1098,6 +1174,7 @@ async function loadFromCache(db){
   RESTAURANTS = restMeta?.value || [];
   SEARCH_INDEX = searchMeta?.value || [];
   REST_MAP = Object.fromEntries(RESTAURANTS.map(r=>[r.restaurant_id,r]));
+  PLACE_MAP = Object.fromEntries(RESTAURANTS.map(r=>[r.place_id,r]));
   FEST_COUNT = statsMeta?.value?.festCount || 0;
   HOURS_DATA = hoursMeta?.value?.restaurants || {};
   DATA_GENERATED_AT = genMeta?.value || null;
@@ -1108,22 +1185,53 @@ async function importFreshData(db, manifest){
     fetch(`data/${manifest.restaurant_data}`).then(r=>r.json()),
     fetch(`data/${manifest.menu_data}`).then(r=>r.json()),
   ];
-  // manifest.hours_data may be absent on an older cached manifest that
-  // predates this being published — treat that as "no hours data" rather
-  // than failing the whole load.
-  const [rData, mData, hData] = await Promise.all([
+  // manifest.hours_data / hand_coded_data / hand_coded_menu_data may be
+  // absent on an older cached manifest that predates any of them being
+  // published — treat missing as "nothing there" rather than failing the
+  // whole load.
+  const [rData, mData, hData, hcData, hcMenuData] = await Promise.all([
     ...fetches,
     manifest.hours_data ? fetch(`data/${manifest.hours_data}`).then(r=>r.json()) : Promise.resolve(null),
+    manifest.hand_coded_data ? fetch(`data/${manifest.hand_coded_data}`).then(r=>r.json()) : Promise.resolve([]),
+    manifest.hand_coded_menu_data ? fetch(`data/${manifest.hand_coded_menu_data}`).then(r=>r.json()) : Promise.resolve([]),
   ]);
-  RESTAURANTS = rData.filter(r=>r.show_in_app);
-  for(const r of RESTAURANTS) r._norm = normalizeForSearch(r.restaurant);
-  REST_MAP = Object.fromEntries(RESTAURANTS.map(r=>[r.restaurant_id,r]));
-  SEARCH_INDEX = mData.map(toSearchIndexEntry);
-  FEST_COUNT = mData.filter(m=>m.is_festival_item&&m.show_in_menu).length;
+  // Hand-coded venues (no real Disney facility id — permanent stands,
+  // display-alias redirects) come from their own independent pipeline
+  // (build_hand_coded_data.py) and their own manifest stream, but merge
+  // into the same restaurant_id-keyed RESTAURANTS/REST_MAP the rest of the
+  // app already uses — same show_in_app gate as regular restaurants.
+  // De-dupe through a single map (hand-coded wins on a restaurant_id
+  // collision) instead of concatenating the raw arrays: restaurant_data.json
+  // can still carry a stale copy of a hand-coded id until the next full
+  // pipeline rebuild picks up its removal, and concatenating would render
+  // that venue twice in any list that iterates RESTAURANTS directly.
+  REST_MAP = Object.fromEntries(
+    rData.filter(r=>r.show_in_app).concat(hcData.filter(r=>r.show_in_app))
+      .map(r=>[r.restaurant_id, r])
+  );
+  RESTAURANTS = Object.values(REST_MAP);
+  for(const r of RESTAURANTS){ r._norm = normalizeForSearch(r.restaurant); r.place_id = placeId(r.restaurant_id); }
+  PLACE_MAP = Object.fromEntries(RESTAURANTS.map(r=>[r.place_id, r]));
+  // Hand-coded menu items never collide with menu_data.json's — a
+  // hand-coded venue has no facility id, so disney_api_fetcher.py never
+  // fetches a menu for it in the first place — so a plain concat is safe
+  // here (unlike the restaurant-record merge above, which does need to
+  // de-dupe against a possibly-stale restaurant_data.json).
+  const allMenuItems = mData.concat(hcMenuData);
+  // offering_id travels with each local item (needed for the save button in
+  // showMenu, Milestone 5) — ellis-api items already carry their own
+  // offering_id in the response, so no local reverse-lookup map is needed
+  // for rendering those; they only ever render inside the ellis-answer
+  // card, never interleaved with this per-restaurant menu list, so there's
+  // no duplicate-rendering risk to guard against at the item level the way
+  // there is for restaurants.
+  for(const item of allMenuItems) item.offering_id = offeringId(item.item_id);
+  SEARCH_INDEX = allMenuItems.map(toSearchIndexEntry);
+  FEST_COUNT = allMenuItems.filter(m=>m.is_festival_item&&m.show_in_menu).length;
   HOURS_DATA = hData?.restaurants || {};
   DATA_GENERATED_AT = manifest.generated || null;
 
-  await idbReplaceAll(db, IDB_STORE_ITEMS, mData);
+  await idbReplaceAll(db, IDB_STORE_ITEMS, allMenuItems);
   await Promise.all([
     idbPut(db, IDB_STORE_META, {key:'restaurants', value:RESTAURANTS}),
     idbPut(db, IDB_STORE_META, {key:'search_index', value:SEARCH_INDEX}),
@@ -1156,7 +1264,9 @@ async function checkAndLoadData(){
     const unchanged = haveCache &&
       manifestRow.value.restaurant_data === manifest.restaurant_data &&
       manifestRow.value.menu_data === manifest.menu_data &&
-      manifestRow.value.hours_data === manifest.hours_data;
+      manifestRow.value.hours_data === manifest.hours_data &&
+      manifestRow.value.hand_coded_data === manifest.hand_coded_data &&
+      manifestRow.value.hand_coded_menu_data === manifest.hand_coded_menu_data;
 
     if(unchanged){
       await idbPut(db, IDB_STORE_META, {key:'last_checked', value: Date.now()});
@@ -1187,6 +1297,7 @@ function init(){
   setupNavigation();
   setupSwipeBack();
   setupEllisUI();
+  refreshSavedIds();
   document.getElementById('results-plane').classList.remove('visible');
   document.getElementById('filter-plane').classList.remove('visible');
   searchSessionState = 'closed';
@@ -1403,6 +1514,8 @@ function buildHomeCards(){
     {icon:'🔄',label:'See Changes',sub:'Menu updates, prices, openings & closures',
      action:()=>showChangesHome()},
     {icon:'💬',label:'Ask ELLIS',sub:'Ask a dining question',action:()=>showEllisHome()},
+    {icon:'⭐',label:'Saved',sub:SAVED_IDS.size?`${SAVED_IDS.size} saved restaurant${SAVED_IDS.size===1?'':'s'}`:'Restaurants you save show up here',
+     action:()=>showSavedRestaurants()},
   ].filter(Boolean);
 
   const container=document.getElementById('home-cards');
@@ -1417,6 +1530,36 @@ function buildHomeCards(){
     el.addEventListener('click',()=>{const c=cards[+el.dataset.idx];if(!c.disabled)c.action();});
   });
   renderDataFreshness();
+}
+
+// Milestone 5 — flat list, no browse hierarchy (browseStack cleared, same
+// pattern showFestivalItems' click handler already uses): "back" from a
+// restaurant reached via Saved falls through to Home, matching how a
+// festival-item tap already behaves.
+function showSavedRestaurants(){
+  const saved = RESTAURANTS.filter(r=>isSaved(r.place_id)).sort((a,b)=>a.restaurant.localeCompare(b.restaurant));
+  browseStack = [];
+  document.getElementById('browse-title').textContent = 'Saved';
+  document.getElementById('browse-sub').textContent = `${saved.length} saved restaurant${saved.length===1?'':'s'}`;
+  const rows = saved.map(r=>`
+    <div class="list-row" data-rid="${esc(r.restaurant_id)}">
+      <div class="list-row-left">
+        <div class="list-row-name">${esc(r.restaurant)}</div>
+        <div class="list-row-sub">${esc(r.experience_type||'')}${r.primary_cuisine&&r.experience_type?' · ':''}${esc(r.primary_cuisine||'')}</div>
+      </div>
+      <div class="list-row-right">
+        ${r.price_tier?`<span class="list-row-price">${'$'.repeat(r.price_tier)}</span>`:''}
+        <span class="list-row-arrow">›</span>
+      </div>
+    </div>`).join('');
+  document.getElementById('browse-list').innerHTML = saved.length
+    ? `<div class="list-card">${rows}</div>`
+    : `<div class="empty-state"><div class="empty-state-title">No saved restaurants yet</div><div class="empty-state-sub">Tap the star on any restaurant to save it here — works offline, no account needed.</div></div>`;
+  document.querySelectorAll('#browse-list .list-row[data-rid]').forEach(el=>{
+    el.addEventListener('click',()=>{browseStack=[];cameToMenuFromChanges=false;currentRestId=el.dataset.rid;showMenu(el.dataset.rid,null,null);});
+  });
+  setNav('browse','Home');
+  showView('browse');
 }
 
 function renderDataFreshness(){
@@ -1447,7 +1590,9 @@ async function forceRefreshData(){
     const unchanged=haveCache &&
       manifestRow.value.restaurant_data===manifest.restaurant_data &&
       manifestRow.value.menu_data===manifest.menu_data &&
-      manifestRow.value.hours_data===manifest.hours_data;
+      manifestRow.value.hours_data===manifest.hours_data &&
+      manifestRow.value.hand_coded_data===manifest.hand_coded_data &&
+      manifestRow.value.hand_coded_menu_data===manifest.hand_coded_menu_data;
 
     if(unchanged){
       await idbPut(db, IDB_STORE_META, {key:'last_checked', value: Date.now()});
@@ -1628,6 +1773,26 @@ async function showMenu(restaurantId,scrollToItem,period){
   const infoBtn=document.getElementById('menu-info-btn');
   if(r.lat&&r.lng){infoBtn.style.display='flex';infoBtn.onclick=()=>showMapsCard(r);}
   else infoBtn.style.display='none';
+
+  // Milestone 4: contextual "ask about this restaurant" — absent/inert
+  // offline (ELLIS_CONFIGURED false, or its own network call just fails
+  // and shows the existing error state), present online, never blocks
+  // this base restaurant view either way.
+  const askBtn=document.getElementById('menu-ask-ellis-btn');
+  if(typeof ELLIS_CONFIGURED!=='undefined'&&ELLIS_CONFIGURED){
+    askBtn.style.display='flex';
+    askBtn.onclick=()=>askEllisAboutRestaurant(restaurantId);
+  } else askBtn.style.display='none';
+
+  const saveBtn=document.getElementById('menu-save-btn');
+  const paintSaveBtn=()=>{
+    const on=isSaved(r.place_id);
+    saveBtn.classList.toggle('saved',on);
+    saveBtn.textContent=on?'★':'☆';
+    saveBtn.setAttribute('aria-label',on?'Remove from saved':'Save this restaurant');
+  };
+  paintSaveBtn();
+  saveBtn.onclick=async()=>{ await toggleSave(r.place_id,'place'); paintSaveBtn(); };
 
   const db = await openMenuDB();
   const restaurantItems = await idbGetAllByIndex(db, IDB_STORE_ITEMS, 'restaurant_id', restaurantId);
@@ -2334,6 +2499,18 @@ function showEllisHome(){
   setNav('ellis','');showView('ellis');
 }
 
+// Milestone 4 — "Ask about this": pre-fills and submits an ELLIS query for
+// the restaurant currently open, reusing the exact same submit() flow the
+// Ask ELLIS screen's own button already drives (no new rendering path).
+function askEllisAboutRestaurant(restaurantId){
+  const r = REST_MAP[restaurantId];
+  if(!r) return;
+  showEllisHome();
+  const input = document.getElementById('ellis-input');
+  input.value = `Tell me about ${r.restaurant}`;
+  document.getElementById('ellis-ask-btn').click();
+}
+
 function showChangesHome(){
   setupChangesControls();
   changesStack=[];
@@ -2771,12 +2948,6 @@ async function askEllis(query, options = {}){
 function normalizeRestName(s){
   return (s||'').toLowerCase().replace(/[®™''’&]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 }
-function findRestaurantIdByName(name){
-  const target = normalizeRestName(name);
-  if(!target) return null;
-  const hit = RESTAURANTS.find(r=>normalizeRestName(r.restaurant)===target);
-  return hit ? hit.restaurant_id : null;
-}
 // Real venue names get phrased differently in prose than in a title field —
 // e.g. block.title "The Front Porch at House of Blues" vs text saying
 // "House of Blues (Front Porch & Smokehouse)". A strict substring check
@@ -2792,6 +2963,20 @@ const ELLIS_NAME_STOPWORDS = new Set(['the','a','an','at','in','of','and','for',
 // if it were is worse than showing nothing. Cards are ordered by where
 // each venue is first mentioned in the text, not blocks[]'s own order, so
 // e.g. a "my top pick" named first in the prose sorts first here too.
+// Up to 6 items per venue, already ranked query-matches-first by ellis-api —
+// rendered as-is, no local re-sort. offering_id rides along on each row
+// (unused for now, wired up for Milestone 5's save button) but never
+// decoded — just an opaque data attribute.
+function renderEllisItems(items){
+  if(!items || !items.length) return '';
+  const rows = items.map(it=>`<div class="ellis-item-row" data-offering-id="${esc(it.offering_id||'')}">
+    <div class="ellis-item-name">${esc(it.name||'')}</div>
+    ${it.description?`<div class="ellis-item-desc">${esc(it.description)}</div>`:''}
+    ${it.price?`<span class="ellis-item-price">${esc(it.price)}</span>`:''}
+  </div>`).join('');
+  return `<div class="ellis-item-list">${rows}</div>`;
+}
+
 function renderEllisBlocks(text, blocks){
   const normText = normalizeRestName(text);
   const matched = [];
@@ -2799,29 +2984,49 @@ function renderEllisBlocks(text, blocks){
     if(b.type!=='venue') continue;
     const words = normalizeRestName(b.title).split(' ').filter(w=>w.length>=3&&!ELLIS_NAME_STOPWORDS.has(w));
     if(!words.length || !words.every(w=>normText.includes(w))) continue;
-    const rid = findRestaurantIdByName(b.title);
-    if(!rid) continue;
+    // Resolve against our OWN computed PLACE_MAP — never decode b.place_id's
+    // structure, only compare it to ids we computed ourselves (canonical
+    // ids are opaque per the contract). No match is a real, valid outcome
+    // now (a venue ellis-api knows about that isn't in our local data,
+    // e.g. off-property) — rendered as an API-sourced card instead of
+    // dropped, unlike the old name-matching path which had no such case.
+    const local = b.place_id ? PLACE_MAP[b.place_id] : null;
     const firstIdx = Math.min(...words.map(w=>normText.indexOf(w)));
-    matched.push({rid, title:b.title, subtitle:b.subtitle, firstIdx});
+    matched.push({block:b, local, firstIdx});
   }
   if(!matched.length) return '';
   matched.sort((a,b)=>a.firstIdx-b.firstIdx);
   // Same .list-card/.list-row markup as showRestaurantList() — identical
   // size/type to every other restaurant row in the app, price tier included.
-  const rows = matched.map(m=>{
-    const r = REST_MAP[m.rid];
-    return `<div class="list-row" data-rid="${esc(m.rid)}">
+  const rows = matched.map(({block:b, local})=>{
+    const apiTag = local ? '' : `<span class="ellis-api-tag">via ELLIS</span>`;
+    return `<div class="list-row ellis-venue-row" ${local?`data-rid="${esc(local.restaurant_id)}"`:''}>
       <div class="list-row-left">
-        <div class="list-row-name">${esc(m.title)}</div>
-        <div class="list-row-sub">${esc(m.subtitle||'')}</div>
+        <div class="list-row-name">${esc(b.title)}${apiTag}</div>
+        <div class="list-row-sub">${esc(b.subtitle||'')}</div>
+        ${renderEllisItems(b.items)}
       </div>
       <div class="list-row-right">
-        ${r?.price_tier?`<span class="list-row-price">${'$'.repeat(r.price_tier)}</span>`:''}
-        <span class="list-row-arrow">›</span>
+        ${local?.price_tier?`<span class="list-row-price">${'$'.repeat(local.price_tier)}</span>`:''}
+        ${local?'<span class="list-row-arrow">›</span>':''}
       </div>
     </div>`;
   }).join('');
   return `<div class="ellis-venue-cards"><div class="ellis-venue-hd">Open in Wienie</div><div class="list-card">${rows}</div></div>`;
+}
+
+// site_data is provenance for the whole answer, not per-venue — "supported"
+// backs the structured blocks against this site's own published data,
+// "unverified_narrative" means the model's prose isn't confirmed against
+// it (labeled, never hidden), "no_site_evidence" means nothing to show.
+function renderEllisProvenance(siteData){
+  if(!siteData || siteData.status==='none') return '';
+  const unverified = siteData.reconciliation==='unverified_narrative';
+  let label;
+  if(unverified) label = 'Unverified — not confirmed against this site’s data';
+  else if(siteData.generated_at) label = `Confirmed against site data as of ${new Date(siteData.generated_at).toLocaleDateString()}`;
+  else label = 'Confirmed against site data';
+  return `<div class="ellis-provenance${unverified?' unverified':''}">${esc(label)}</div>`;
 }
 
 function setupEllisUI(){
@@ -2845,8 +3050,17 @@ function setupEllisUI(){
     try{
       const answer = await askEllis(query);
       output.classList.remove('loading');
-      const textHtml = `<div class="ellis-answer-text">${esc(answer.text).replace(/\n/g,'<br>')}</div>`;
-      output.innerHTML = textHtml + renderEllisBlocks(answer.text, answer.blocks);
+      // Structured-result-first: when ellis-api found matching venues,
+      // those blocks ARE the answer and text drops to labeled commentary
+      // underneath. text stays primary only when there are no blocks to
+      // show at all — nothing else to fall back to in that case.
+      const blocksHtml = renderEllisBlocks(answer.text, answer.blocks);
+      const hasBlocks = !!blocksHtml;
+      const textHtml = hasBlocks
+        ? `<div class="ellis-answer-text ellis-notes"><strong>ELLIS notes:</strong> ${esc(answer.text).replace(/\n/g,'<br>')}</div>`
+        : `<div class="ellis-answer-text">${esc(answer.text).replace(/\n/g,'<br>')}</div>`;
+      const provenanceHtml = renderEllisProvenance(answer.site_data);
+      output.innerHTML = (hasBlocks ? blocksHtml + textHtml : textHtml) + provenanceHtml;
       output.querySelectorAll('.ellis-venue-cards .list-row[data-rid]').forEach(card=>{
         card.addEventListener('click',()=>{
           const rid = card.dataset.rid;
