@@ -1,6 +1,8 @@
 {
-  "generated": "2026-07-19T06:32:52Z",
-  "restaurant_data": "restaurant_data.1d0a96ae47.json",
-  "menu_data": "menu_data.f51be00fb6.json",
-  "hours_data": "hours_data.21dfdbf3a4.json"
+  "generated": "2026-07-20T07:06:37Z",
+  "restaurant_data": "restaurant_data.965d24bc0f.json",
+  "menu_data": "menu_data.999006416f.json",
+  "hours_data": "hours_data.5da1674c53.json",
+  "hand_coded_data": "hand_coded_data.05e82a6fa6.json",
+  "hand_coded_menu_data": "hand_coded_menu_data.4a5c5807a7.json"
 }
